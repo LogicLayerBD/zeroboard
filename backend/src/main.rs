@@ -13,11 +13,13 @@ use std::time::Instant;
 
 use anyhow::Context;
 use axum::extract::State;
-use axum::http::{HeaderName, Request, StatusCode};
+use axum::http::header::CACHE_CONTROL;
+use axum::http::{HeaderName, HeaderValue, Request, StatusCode};
 use axum::routing::get;
 use axum::Router;
 use sqlx::SqlitePool;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
@@ -30,6 +32,27 @@ use crate::ws::WsHub;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_LOG_FILTER: &str = "zeroboard=info,tower_http=info";
+
+/// Sent on every response (see security rules). `style-src 'unsafe-inline'` is
+/// required by Svelte's inline styles; scripts stay restricted to 'self'.
+const SECURITY_HEADERS: &[(&str, &str)] = &[
+    (
+        "content-security-policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    ),
+    ("x-content-type-options", "nosniff"),
+    ("x-frame-options", "DENY"),
+    ("x-xss-protection", "1; mode=block"),
+    ("referrer-policy", "strict-origin-when-cross-origin"),
+    // Browsers ignore HSTS over plain HTTP; the refresh cookie is `Secure` anyway.
+    ("strict-transport-security", "max-age=31536000"),
+    ("permissions-policy", "camera=(), microphone=(), geolocation=()"),
+    ("cross-origin-opener-policy", "same-origin"),
+    ("cross-origin-resource-policy", "same-origin"),
+];
+/// API responses carry user data; handlers may set their own Cache-Control.
+const DEFAULT_CACHE_CONTROL: &str = "no-store";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -111,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
 fn router(state: AppState) -> Router {
     let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
 
-    Router::new()
+    let app = Router::new()
         .route("/live", get(live))
         .route("/ready", get(ready))
         .merge(handlers::auth::router(&state))
@@ -127,7 +150,9 @@ fn router(state: AppState) -> Router {
         .merge(handlers::admin::router(&state))
         .merge(ws::router())
         .fallback(|| async { AppError::NotFound })
-        .with_state(state)
+        .with_state(state);
+
+    with_security_headers(app)
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
                 let request_id = req
@@ -146,6 +171,19 @@ fn router(state: AppState) -> Router {
         )
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
+}
+
+fn with_security_headers(app: Router) -> Router {
+    let app = SECURITY_HEADERS.iter().fold(app, |app, (name, value)| {
+        app.layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static(name),
+            HeaderValue::from_static(value),
+        ))
+    });
+    app.layer(SetResponseHeaderLayer::if_not_present(
+        CACHE_CONTROL,
+        HeaderValue::from_static(DEFAULT_CACHE_CONTROL),
+    ))
 }
 
 async fn live() -> StatusCode {
@@ -281,6 +319,31 @@ mod tests {
         state.read_db.close().await;
         let (status, _) = get_status(state, "/ready").await;
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn every_response_carries_security_headers() {
+        let state = test_state(std::env::temp_dir()).await;
+        for (uri, expected_status) in [
+            ("/live", StatusCode::OK),
+            ("/api/nope", StatusCode::NOT_FOUND),
+            ("/api/workspaces", StatusCode::UNAUTHORIZED),
+        ] {
+            let response = router(state.clone())
+                .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected_status, "{uri}");
+            let headers = response.headers();
+            for (name, value) in SECURITY_HEADERS {
+                assert_eq!(headers[*name], *value, "{uri}: {name}");
+            }
+            assert_eq!(headers[CACHE_CONTROL], DEFAULT_CACHE_CONTROL, "{uri}");
+            assert!(headers["content-security-policy"]
+                .to_str()
+                .unwrap()
+                .contains("frame-ancestors 'none'"));
+        }
     }
 
     #[tokio::test]

@@ -518,8 +518,14 @@ GET    /api/admin/storage
 ### WebSocket
 
 ```
-WS     /ws?token=<jwt>
+WS     /ws        Sec-WebSocket-Protocol: zeroboard.v1, bearer.<jwt>
 ```
+
+The access token is offered as a subprotocol (never in the URL); the server echoes
+`zeroboard.v1`. Handshake errors: 403 cross-origin `Origin`, 401 missing/invalid token,
+400 `zeroboard.v1` not offered, 429 more than 10 connections for the user.
+The server closes the socket with code `4401` when the token expires (client refreshes
+and reconnects) and `1008` when a client sends more than 30 messages per 10 seconds.
 
 ---
 

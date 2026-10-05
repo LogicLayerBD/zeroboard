@@ -30,8 +30,24 @@ impl WsHub {
         Self::default()
     }
 
-    pub fn register(&self, client_id: &str, user_id: &str, sender: mpsc::UnboundedSender<Message>) {
-        self.lock().insert(
+    /// Registers the client unless `user_id` already has `max_per_user` connections.
+    /// Counting and inserting share one lock so concurrent handshakes cannot overshoot.
+    pub fn register(
+        &self,
+        client_id: &str,
+        user_id: &str,
+        sender: mpsc::UnboundedSender<Message>,
+        max_per_user: usize,
+    ) -> bool {
+        let mut clients = self.lock();
+        let existing = clients
+            .values()
+            .filter(|client| client.user_id == user_id)
+            .count();
+        if existing >= max_per_user {
+            return false;
+        }
+        clients.insert(
             client_id.to_string(),
             WsClient {
                 user_id: user_id.to_string(),
@@ -39,6 +55,7 @@ impl WsHub {
                 sender,
             },
         );
+        true
     }
 
     /// Removes the client, returning it so the caller can announce its departure.
@@ -167,9 +184,11 @@ fn deliver(client_id: &str, client: &WsClient, message: &Message, event_type: &s
 mod tests {
     use super::*;
 
+    const NO_LIMIT: usize = usize::MAX;
+
     fn connect(hub: &WsHub, client_id: &str, user_id: &str) -> mpsc::UnboundedReceiver<Message> {
         let (tx, rx) = mpsc::unbounded_channel();
-        hub.register(client_id, user_id, tx);
+        assert!(hub.register(client_id, user_id, tx, NO_LIMIT));
         rx
     }
 
@@ -215,6 +234,24 @@ mod tests {
         assert_eq!(received_types(&mut tab1), ["PING"]);
         assert_eq!(received_types(&mut tab2), ["PING"]);
         assert!(received_types(&mut other).is_empty());
+    }
+
+    #[test]
+    fn register_enforces_per_user_limit() {
+        const LIMIT: usize = 2;
+        let hub = WsHub::new();
+        let try_register = |client_id: &str, user_id: &str| {
+            let (tx, _rx) = mpsc::unbounded_channel();
+            hub.register(client_id, user_id, tx, LIMIT)
+        };
+
+        assert!(try_register("a", "u1"));
+        assert!(try_register("b", "u1"));
+        assert!(!try_register("c", "u1"));
+        assert!(try_register("d", "u2"), "limit is per user");
+
+        hub.unregister("a");
+        assert!(try_register("c", "u1"), "slot is freed on unregister");
     }
 
     #[test]

@@ -10,7 +10,7 @@ alwaysApply: false
 ```
 Client Browser
     │
-    │  WS /ws?token=<jwt>
+    │  WS /ws   (Sec-WebSocket-Protocol: zeroboard.v1, bearer.<jwt>)
     ▼
 WsHub (Arc<Mutex<HashMap<BoardId, Vec<WsClient>>>>)
     │
@@ -35,11 +35,13 @@ pub struct WsHub {
 ```
 
 ### On Connect
-1. Extract JWT from query param `?token=<jwt>`
-2. Reject with 401 if invalid or expired
-3. Register client in hub with no board yet
-4. Start read loop (for JOIN_BOARD / LEAVE_BOARD events)
-5. On disconnect: remove client, broadcast MEMBER_LEFT to their board
+1. Reject with 403 if an `Origin` header is present and is not the request's own host (CSWSH)
+2. Extract JWT from the `bearer.<jwt>` subprotocol — never from the URL (tokens in URLs leak via logs/history)
+3. Reject with 401 if invalid or expired; 400 if `zeroboard.v1` is not offered; 429 above 10 connections per user
+4. Echo only `zeroboard.v1` back, register client in hub with no board yet
+5. Start read loop (for JOIN_BOARD / LEAVE_BOARD events), rate limited to 30 messages per 10s (close 1008)
+6. Close with code 4401 when the token's `exp` passes
+7. On disconnect: remove client, broadcast MEMBER_LEFT to their board
 
 ### Broadcast Rules
 ```rust
@@ -82,7 +84,11 @@ pub struct WsEvent {
 
 ### Connection
 ```typescript
-const WS_URL = `ws://${window.location.host}/ws?token=${getAccessToken()}`;
+const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+const socket = new WebSocket(`${scheme}://${window.location.host}/ws`, [
+  'zeroboard.v1',
+  `bearer.${getAccessToken()}`,
+]);
 ```
 - Connect once on app load after login
 - Store connection in a Svelte store so components can check status
@@ -97,8 +103,8 @@ const BACKOFF = [1000, 2000, 4000, 8000, 16000, 30000]; // ms
 
 ### Token Refresh
 - WS token is the short-lived JWT
-- When JWT expires, WS connection will get a 401 close code
-- On 401 close: refresh token, get new JWT, reconnect with new token
+- When JWT expires, the server closes the socket with code `4401`
+- On a 4401 close (or a 401 handshake failure): refresh token, get new JWT, reconnect with new token
 
 ### Optimistic Updates
 For drag-and-drop operations:

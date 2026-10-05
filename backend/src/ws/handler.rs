@@ -1,21 +1,30 @@
-//! `GET /ws?token=<jwt>`: authenticates, then runs one task per connection that
-//! forwards hub events, handles JOIN_BOARD / LEAVE_BOARD / PONG and keeps a heartbeat.
+//! `GET /ws`: authenticates during the handshake, then runs one task per connection
+//! that forwards hub events, handles JOIN_BOARD / LEAVE_BOARD / PONG, keeps a
+//! heartbeat and closes the socket when the access token expires.
+//!
+//! The access token is offered as a WebSocket subprotocol
+//! (`Sec-WebSocket-Protocol: zeroboard.v1, bearer.<jwt>`) so it never appears in
+//! URLs, logs or browser history.
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::rejection::QueryRejection;
 use axum::extract::ws::{
-    rejection::WebSocketUpgradeRejection, Message, WebSocket, WebSocketUpgrade,
+    close_code, rejection::WebSocketUpgradeRejection, CloseFrame, Message, WebSocket,
+    WebSocketUpgrade,
 };
-use axum::extract::{Query, State};
+use axum::extract::State;
+use axum::http::header::{HOST, ORIGIN, SEC_WEBSOCKET_PROTOCOL};
+use axum::http::uri::Authority;
+use axum::http::{HeaderMap, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
-use serde::Deserialize;
 use tokio::sync::mpsc;
-use tokio::time::{interval_at, sleep_until, Instant, MissedTickBehavior};
+use tokio::time::{interval_at, sleep_until, timeout, Instant, MissedTickBehavior};
 
 use super::events::{self, ClientEvent, WsEvent};
+use super::WsHub;
 use crate::auth::jwt;
 use crate::errors::AppError;
 use crate::handlers::parse_id;
@@ -28,6 +37,22 @@ const PONG_TIMEOUT: Duration = Duration::from_secs(10);
 /// Client → server events are tiny JSON objects; anything larger is abuse.
 const MAX_CLIENT_MESSAGE_BYTES: usize = 4 * 1024;
 const BOARD_ID_FIELD: &str = "board id";
+
+/// Subprotocol the client must offer; it is the one echoed back to the browser.
+pub const WS_PROTOCOL: &str = "zeroboard.v1";
+/// Offered alongside [`WS_PROTOCOL`] as `bearer.<jwt>`; never echoed back.
+pub const BEARER_PROTOCOL_PREFIX: &str = "bearer.";
+const MISSING_PROTOCOL_MESSAGE: &str = "websocket subprotocol zeroboard.v1 is required";
+/// Application close code (4000–4999 range) telling the client to refresh its token
+/// and reconnect.
+pub const CLOSE_TOKEN_EXPIRED: u16 = 4401;
+/// Generous for several tabs and devices; bounds per-user memory and task count.
+const MAX_CONNECTIONS_PER_USER: usize = 10;
+/// A peer that cannot absorb a frame within this time is treated as dead.
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+/// Each JOIN_BOARD costs DB queries, so client messages are rate limited per connection.
+const MESSAGE_WINDOW: Duration = Duration::from_secs(10);
+const MAX_MESSAGES_PER_WINDOW: u32 = 30;
 
 #[derive(Debug, Clone, Copy)]
 struct Heartbeat {
@@ -44,90 +69,244 @@ pub fn router() -> Router<AppState> {
     Router::new().route("/ws", get(ws_connect))
 }
 
-#[derive(Deserialize)]
-pub struct WsQuery {
-    token: Option<String>,
-}
-
-/// Token is checked before the upgrade so a bad token is always a plain 401.
+/// Every check runs before the upgrade, so failures are plain HTTP errors
+/// (403 cross-origin, 401 bad token, 400 missing subprotocol, 429 too many connections).
 pub async fn ws_connect(
     State(state): State<AppState>,
-    query: Result<Query<WsQuery>, QueryRejection>,
+    headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
 ) -> Result<Response, AppError> {
-    connect(state, query, upgrade, HEARTBEAT).await
+    connect(state, headers, upgrade, HEARTBEAT).await
 }
 
 async fn connect(
     state: AppState,
-    query: Result<Query<WsQuery>, QueryRejection>,
+    headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
     heartbeat: Heartbeat,
 ) -> Result<Response, AppError> {
-    let token = query
-        .ok()
-        .and_then(|Query(query)| query.token)
+    // Cross-site WebSocket hijacking: browsers always send Origin, and a page on
+    // another site cannot forge it. Non-browser clients omit it but still need a token.
+    if !is_same_origin(&headers) {
+        tracing::warn!("ws handshake rejected: cross-origin request");
+        return Err(AppError::Forbidden);
+    }
+    let offered = offered_protocols(&headers);
+    let token = offered
+        .iter()
+        .find_map(|protocol| protocol.strip_prefix(BEARER_PROTOCOL_PREFIX))
+        .filter(|token| !token.is_empty())
         .ok_or(AppError::Unauthorized)?;
-    let claims = jwt::verify_access_token(&token, &state.config.jwt_secret).map_err(|err| {
+    let claims = jwt::verify_access_token(token, &state.config.jwt_secret).map_err(|err| {
         tracing::debug!(error = %err, "ws access token rejected");
         AppError::Unauthorized
     })?;
+    if !offered.contains(&WS_PROTOCOL) {
+        return Err(AppError::BadRequest(MISSING_PROTOCOL_MESSAGE.to_string()));
+    }
     let upgrade = match upgrade {
         Ok(upgrade) => upgrade,
         Err(rejection) => return Ok(rejection.into_response()),
     };
 
+    // The slot is claimed here, before the 101 response, so the limit holds even
+    // when many handshakes for the same user race.
     let user_id = claims.sub;
+    let client_id = uuid::Uuid::new_v4().to_string();
+    let (sender, outgoing) = mpsc::unbounded_channel();
+    if !state
+        .ws_hub
+        .register(&client_id, &user_id, sender, MAX_CONNECTIONS_PER_USER)
+    {
+        tracing::warn!(%user_id, "ws handshake rejected: connection limit reached");
+        return Err(AppError::TooManyRequests);
+    }
+    let registration = Registration {
+        hub: state.ws_hub.clone(),
+        client_id,
+    };
+
+    let expires_at = token_deadline(claims.exp);
     Ok(upgrade
+        .protocols([WS_PROTOCOL])
         .max_message_size(MAX_CLIENT_MESSAGE_BYTES)
-        .on_upgrade(move |socket| run_client(state, socket, user_id, heartbeat))
+        .on_upgrade(move |socket| {
+            run_client(
+                state,
+                socket,
+                registration,
+                outgoing,
+                user_id,
+                expires_at,
+                heartbeat,
+            )
+        })
         .into_response())
 }
 
-async fn run_client(state: AppState, mut socket: WebSocket, user_id: String, heartbeat: Heartbeat) {
-    let client_id = uuid::Uuid::new_v4().to_string();
-    let (sender, mut outgoing) = mpsc::unbounded_channel();
-    state.ws_hub.register(&client_id, &user_id, sender);
+/// Owns a hub slot from the handshake until the connection task ends. If the
+/// upgrade never completes, axum drops the callback holding this, freeing the slot.
+struct Registration {
+    hub: Arc<WsHub>,
+    client_id: String,
+}
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        self.hub.unregister(&self.client_id);
+    }
+}
+
+fn offered_protocols(headers: &HeaderMap) -> Vec<&str> {
+    headers
+        .get_all(SEC_WEBSOCKET_PROTOCOL)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .filter(|protocol| !protocol.is_empty())
+        .collect()
+}
+
+/// True when there is no Origin (non-browser client) or it names the same host
+/// and port the request was sent to.
+fn is_same_origin(headers: &HeaderMap) -> bool {
+    let Some(origin) = headers.get(ORIGIN) else {
+        return true;
+    };
+    let origin = origin.to_str().ok().and_then(|raw| raw.parse::<Uri>().ok());
+    let host = headers
+        .get(HOST)
+        .and_then(|raw| raw.to_str().ok())
+        .and_then(|raw| raw.parse::<Authority>().ok());
+    let (Some(origin), Some(host)) = (origin, host) else {
+        return false;
+    };
+    let (Some(origin_authority), Some(default_port)) = (
+        origin.authority(),
+        origin.scheme_str().and_then(default_port),
+    ) else {
+        return false;
+    };
+    origin_authority.host().eq_ignore_ascii_case(host.host())
+        && origin_authority.port_u16().unwrap_or(default_port)
+            == host.port_u16().unwrap_or(default_port)
+}
+
+fn default_port(scheme: &str) -> Option<u16> {
+    match scheme {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    }
+}
+
+/// Maps the token's `exp` (Unix seconds) onto the monotonic clock.
+fn token_deadline(exp: usize) -> Instant {
+    let now = chrono::Utc::now().timestamp();
+    let remaining = i64::try_from(exp).unwrap_or(i64::MAX).saturating_sub(now);
+    Instant::now() + Duration::from_secs(u64::try_from(remaining).unwrap_or(0))
+}
+
+/// Fixed-window counter of client messages on one connection.
+struct MessageBudget {
+    window_start: Instant,
+    used: u32,
+}
+
+impl MessageBudget {
+    fn new() -> Self {
+        Self {
+            window_start: Instant::now(),
+            used: 0,
+        }
+    }
+
+    fn allow(&mut self, now: Instant) -> bool {
+        if now.duration_since(self.window_start) >= MESSAGE_WINDOW {
+            self.window_start = now;
+            self.used = 0;
+        }
+        self.used += 1;
+        self.used <= MAX_MESSAGES_PER_WINDOW
+    }
+}
+
+fn close_frame(code: u16, reason: &'static str) -> Option<CloseFrame<'static>> {
+    Some(CloseFrame {
+        code,
+        reason: reason.into(),
+    })
+}
+
+async fn run_client(
+    state: AppState,
+    mut socket: WebSocket,
+    registration: Registration,
+    mut outgoing: mpsc::UnboundedReceiver<Message>,
+    user_id: String,
+    expires_at: Instant,
+    heartbeat: Heartbeat,
+) {
+    let client_id = registration.client_id.as_str();
     tracing::info!(%client_id, %user_id, "ws client connected");
 
     let mut ping_timer = interval_at(Instant::now() + heartbeat.interval, heartbeat.interval);
     ping_timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
     let mut pong_deadline: Option<Instant> = None;
+    let mut budget = MessageBudget::new();
 
-    loop {
+    let close = loop {
         tokio::select! {
-            incoming = socket.recv() => match incoming {
-                Some(Ok(Message::Text(text))) => {
-                    handle_client_message(&state, &client_id, &user_id, &text, &mut pong_deadline).await;
+            incoming = socket.recv() => {
+                let message = match incoming {
+                    Some(Ok(Message::Close(_))) | None => break None,
+                    Some(Ok(message)) => message,
+                    Some(Err(err)) => {
+                        tracing::debug!(error = %err, %client_id, "ws receive failed");
+                        break None;
+                    }
+                };
+                if matches!(message, Message::Text(_) | Message::Binary(_)) && !budget.allow(Instant::now()) {
+                    tracing::warn!(%client_id, %user_id, "ws client exceeded message rate, closing");
+                    break close_frame(close_code::POLICY, "rate limit exceeded");
                 }
-                Some(Ok(Message::Close(_))) | None => break,
-                Some(Ok(_)) => {}
-                Some(Err(err)) => {
-                    tracing::debug!(error = %err, %client_id, "ws receive failed");
-                    break;
+                if let Message::Text(text) = message {
+                    handle_client_message(&state, client_id, &user_id, &text, &mut pong_deadline).await;
                 }
             },
             message = outgoing.recv() => {
-                let Some(message) = message else { break };
-                if let Err(err) = socket.send(message).await {
-                    tracing::debug!(error = %err, %client_id, "ws send failed");
-                    break;
+                let Some(message) = message else { break None };
+                match timeout(SEND_TIMEOUT, socket.send(message)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) => {
+                        tracing::debug!(error = %err, %client_id, "ws send failed");
+                        break None;
+                    }
+                    Err(_) => {
+                        tracing::warn!(%client_id, %user_id, "ws send timed out, closing");
+                        break None;
+                    }
                 }
             },
             _ = ping_timer.tick() => {
-                state.ws_hub.send_to_client(&client_id, &events::ping());
+                state.ws_hub.send_to_client(client_id, &events::ping());
                 pong_deadline.get_or_insert(Instant::now() + heartbeat.timeout);
             },
             _ = sleep_until(pong_deadline.unwrap_or_else(Instant::now)), if pong_deadline.is_some() => {
                 tracing::info!(%client_id, %user_id, "ws client missed heartbeat, closing");
-                break;
+                break None;
+            },
+            _ = sleep_until(expires_at) => {
+                tracing::info!(%client_id, %user_id, "ws access token expired, closing");
+                break close_frame(CLOSE_TOKEN_EXPIRED, "token expired");
             },
         }
-    }
+    };
 
-    disconnect(&state, &client_id, &user_id);
-    // Best-effort close frame; the peer may already be gone.
-    let _ = socket.send(Message::Close(None)).await;
+    disconnect(&state, client_id, &user_id);
+    // Best-effort close frame; the peer may already be gone or stalled.
+    let _ = timeout(SEND_TIMEOUT, socket.send(Message::Close(close))).await;
 }
 
 async fn handle_client_message(
@@ -217,10 +396,13 @@ fn broadcast_presence(state: &AppState, board_id: &str) {
 mod tests {
     use std::net::SocketAddr;
 
-    use axum::http::StatusCode;
+    use axum::http::{HeaderValue, StatusCode};
     use futures_util::{SinkExt, StreamExt};
     use serde_json::{json, Value};
     use tokio::net::TcpStream;
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::handshake::client::Request as ClientRequest;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
     use tokio_tungstenite::tungstenite::{self, Message as ClientMessage};
     use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
@@ -237,6 +419,8 @@ mod tests {
         interval: Duration::from_millis(250),
         timeout: Duration::from_millis(100),
     };
+    /// Handshakes beyond the per-user limit in the concurrent limit test.
+    const EXTRA_ATTEMPTS: usize = 5;
     /// Several heartbeat intervals, comfortably past the pong timeout.
     const HEARTBEAT_OBSERVATION: Duration = Duration::from_millis(1100);
 
@@ -260,20 +444,81 @@ mod tests {
                 "/ws",
                 get(
                     |State(state): State<AppState>,
-                     query: Result<Query<WsQuery>, QueryRejection>,
+                     headers: HeaderMap,
                      upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>| async move {
-                        connect(state, query, upgrade, FAST_HEARTBEAT).await
+                        connect(state, headers, upgrade, FAST_HEARTBEAT).await
                     },
                 ),
             )
             .with_state(state)
     }
 
+    /// Handshake request offering `protocols` (comma-joined), plus optional extra headers.
+    fn handshake(addr: SocketAddr, protocols: &str, extra: &[(&str, &str)]) -> ClientRequest {
+        let mut request = format!("ws://{addr}/ws").into_client_request().unwrap();
+        if !protocols.is_empty() {
+            request.headers_mut().insert(
+                SEC_WEBSOCKET_PROTOCOL,
+                HeaderValue::from_str(protocols).unwrap(),
+            );
+        }
+        for (name, value) in extra {
+            request.headers_mut().insert(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                HeaderValue::from_str(value).unwrap(),
+            );
+        }
+        request
+    }
+
+    fn auth_protocols(token: &str) -> String {
+        format!("{WS_PROTOCOL}, {BEARER_PROTOCOL_PREFIX}{token}")
+    }
+
     async fn connect_client(addr: SocketAddr, user: &TestUser) -> Client {
-        let (client, _) = connect_async(format!("ws://{addr}/ws?token={}", user.token))
+        let (client, response) = connect_async(handshake(addr, &auth_protocols(&user.token), &[]))
             .await
             .unwrap();
+        assert_eq!(response.headers()[SEC_WEBSOCKET_PROTOCOL], WS_PROTOCOL);
         client
+    }
+
+    async fn handshake_status(request: ClientRequest) -> StatusCode {
+        match connect_async(request).await {
+            Err(tungstenite::Error::Http(response)) => response.status(),
+            Ok(_) => StatusCode::SWITCHING_PROTOCOLS,
+            Err(other) => panic!("unexpected handshake error: {other:?}"),
+        }
+    }
+
+    /// Reads until the server closes, returning the close code (if a frame was sent).
+    async fn close_code_of(client: &mut Client) -> Option<CloseCode> {
+        let closed = tokio::time::timeout(EVENT_TIMEOUT, async {
+            while let Some(Ok(message)) = client.next().await {
+                if let ClientMessage::Close(frame) = message {
+                    return frame.map(|frame| frame.code);
+                }
+            }
+            None
+        })
+        .await;
+        closed.expect("server did not close the connection")
+    }
+
+    fn token_expiring_in(user: &TestUser, secret: &str, seconds: i64) -> String {
+        let now = chrono::Utc::now().timestamp();
+        let claims = jwt::Claims {
+            sub: user.id.clone(),
+            email: user.email.clone(),
+            exp: usize::try_from(now + seconds).unwrap(),
+            iat: usize::try_from(now).unwrap(),
+        };
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+            &claims,
+            &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap()
     }
 
     async fn send(client: &mut Client, event: Value) {
@@ -324,16 +569,193 @@ mod tests {
     #[tokio::test]
     async fn rejects_missing_or_invalid_token_with_401() {
         let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+        let wrong_secret =
+            token_expiring_in(&user, "another-secret-that-is-at-least-32-chars", 600);
+
+        for protocols in [
+            String::new(),
+            WS_PROTOCOL.to_string(),
+            format!("{WS_PROTOCOL}, {BEARER_PROTOCOL_PREFIX}"),
+            auth_protocols("not-a-jwt"),
+            auth_protocols(&wrong_secret),
+        ] {
+            assert_eq!(
+                handshake_status(handshake(addr, &protocols, &[])).await,
+                StatusCode::UNAUTHORIZED,
+                "{protocols}"
+            );
+        }
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn token_in_query_string_is_not_accepted() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
         let addr = serve(crate::router(t.state.clone())).await;
 
-        for query in ["", "?token=", "?token=not-a-jwt"] {
-            match connect_async(format!("ws://{addr}/ws{query}")).await {
-                Err(tungstenite::Error::Http(response)) => {
-                    assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{query}")
+        let request = format!("ws://{addr}/ws?token={}", user.token)
+            .into_client_request()
+            .unwrap();
+        assert_eq!(handshake_status(request).await, StatusCode::UNAUTHORIZED);
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn requires_the_zeroboard_subprotocol() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+
+        let bearer_only = format!("{BEARER_PROTOCOL_PREFIX}{}", user.token);
+        assert_eq!(
+            handshake_status(handshake(addr, &bearer_only, &[])).await,
+            StatusCode::BAD_REQUEST
+        );
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn rejects_cross_origin_handshakes() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+        let protocols = auth_protocols(&user.token);
+        let same_origin = format!("http://{addr}");
+
+        for origin in ["https://evil.example", "null", "http://127.0.0.1:1"] {
+            assert_eq!(
+                handshake_status(handshake(addr, &protocols, &[("origin", origin)])).await,
+                StatusCode::FORBIDDEN,
+                "{origin}"
+            );
+        }
+        assert_eq!(
+            handshake_status(handshake(addr, &protocols, &[("origin", &same_origin)])).await,
+            StatusCode::SWITCHING_PROTOCOLS
+        );
+
+        t.cleanup().await;
+    }
+
+    #[test]
+    fn same_origin_normalizes_default_ports_and_case() {
+        let check = |origin: &str, host: &str| {
+            let mut headers = HeaderMap::new();
+            headers.insert(ORIGIN, HeaderValue::from_str(origin).unwrap());
+            headers.insert(HOST, HeaderValue::from_str(host).unwrap());
+            is_same_origin(&headers)
+        };
+        assert!(check("https://Board.Example.com", "board.example.com"));
+        assert!(check("https://board.example.com", "board.example.com:443"));
+        assert!(check("http://localhost:5173", "localhost:5173"));
+        assert!(!check("http://localhost:5173", "localhost:3000"));
+        assert!(!check(
+            "https://board.example.com.evil.io",
+            "board.example.com"
+        ));
+        assert!(!check("ftp://board.example.com", "board.example.com"));
+        assert!(is_same_origin(&HeaderMap::new()));
+    }
+
+    #[tokio::test]
+    async fn limits_connections_per_user() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+
+        let protocols = auth_protocols(&user.token);
+
+        // All handshakes race; exactly the limit may succeed.
+        let attempts = (0..MAX_CONNECTIONS_PER_USER + EXTRA_ATTEMPTS)
+            .map(|_| connect_async(handshake(addr, &protocols, &[])));
+        let results = futures_util::future::join_all(attempts).await;
+        let mut connected = Vec::new();
+        let mut rejected = 0;
+        for result in results {
+            match result {
+                Ok((client, _)) => connected.push(client),
+                Err(tungstenite::Error::Http(response))
+                    if response.status() == StatusCode::TOO_MANY_REQUESTS =>
+                {
+                    rejected += 1
                 }
-                other => panic!("expected 401 for {query:?}, got {other:?}"),
+                Err(other) => panic!("unexpected handshake error: {other:?}"),
             }
         }
+        assert_eq!(connected.len(), MAX_CONNECTIONS_PER_USER);
+        assert_eq!(rejected, EXTRA_ATTEMPTS);
+
+        // Closing one connection frees its slot.
+        let mut closed = connected.pop().unwrap();
+        closed.close(None).await.unwrap();
+        let deadline = Instant::now() + EVENT_TIMEOUT;
+        while handshake_status(handshake(addr, &protocols, &[])).await
+            != StatusCode::SWITCHING_PROTOCOLS
+        {
+            assert!(Instant::now() < deadline, "slot was never freed");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn dropping_an_unused_registration_frees_the_slot() {
+        let t = TestApp::new().await;
+        let hub = t.state.ws_hub.clone();
+        let (sender, _outgoing) = mpsc::unbounded_channel();
+        assert!(hub.register("c1", "u1", sender, 1));
+        let registration = Registration {
+            hub: hub.clone(),
+            client_id: "c1".to_string(),
+        };
+
+        let (sender, _outgoing) = mpsc::unbounded_channel();
+        assert!(!hub.register("c2", "u1", sender.clone(), 1));
+        drop(registration);
+        assert!(hub.register("c2", "u1", sender, 1));
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn closes_connection_when_token_expires() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+        let token = token_expiring_in(&user, &t.state.config.jwt_secret, 1);
+
+        let (mut client, _) = connect_async(handshake(addr, &auth_protocols(&token), &[]))
+            .await
+            .unwrap();
+        assert_eq!(
+            close_code_of(&mut client).await,
+            Some(CloseCode::from(CLOSE_TOKEN_EXPIRED))
+        );
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn closes_clients_that_flood_messages() {
+        let t = TestApp::new().await;
+        let user = t.user("u@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+        let mut client = connect_client(addr, &user).await;
+
+        for _ in 0..=MAX_MESSAGES_PER_WINDOW {
+            // The server may close mid-flood; later sends failing is expected.
+            let _ = client
+                .send(ClientMessage::Text(r#"{"type":"PONG"}"#.into()))
+                .await;
+        }
+        assert_eq!(close_code_of(&mut client).await, Some(CloseCode::Policy));
 
         t.cleanup().await;
     }
