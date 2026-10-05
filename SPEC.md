@@ -1,6 +1,7 @@
 # ZeroBoard — Project Specification v1.0
 
 ## Elevator Pitch
+
 A real-time Kanban + List project management tool for small teams (2–5 people).
 Single Rust binary, embedded SQLite, embedded Svelte frontend.
 No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
@@ -9,45 +10,64 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 
 ## Tech Stack
 
-| Layer | Choice | Reason |
-|---|---|---|
-| Backend | Rust + Axum + Tokio | Performance, single binary |
-| Frontend | Svelte 5 + Vite | Compiles to tiny static files, embedded in binary |
-| Real-time | WebSockets (tokio-tungstenite) | Card sync, cursor presence |
-| Database | SQLite (sqlx + WAL mode) | Zero-infra, file-based |
-| Embedding | rust-embed | Bakes frontend into binary |
-| Auth | JWT (jsonwebtoken crate) | Stateless, simple |
-| File Storage | Local disk (configurable path) | No S3 dependency for v1 |
+
+| Layer        | Choice                         | Reason                                            |
+| ------------ | ------------------------------ | ------------------------------------------------- |
+| Backend      | Rust + Axum + Tokio            | Performance, single binary                        |
+| Frontend     | Svelte 5 + Vite                | Compiles to tiny static files, embedded in binary |
+| Real-time    | WebSockets (tokio-tungstenite) | Card sync, cursor presence                        |
+| Database     | SQLite (sqlx + WAL mode)       | Zero-infra, file-based                            |
+| Embedding    | rust-embed                     | Bakes frontend into binary                        |
+| Auth         | JWT (jsonwebtoken crate)       | Stateless, simple                                 |
+| File Storage | Local disk (configurable path) | No S3 dependency for v1                           |
+
 
 ---
 
+
+
 ## V1 Feature List (Locked Scope)
 
+
+
 ### Authentication
+
 - [ ] Register (first user becomes admin)
 - [ ] Login / Logout
 - [ ] JWT access token (short-lived) + refresh token (long-lived, stored in httpOnly cookie)
 - [ ] Basic profile: display name, avatar color
 
+
+
 ### Workspaces & Boards
+
 - [ ] Create / rename / delete workspace
 - [ ] Invite members to workspace by email
 - [ ] Create / rename / archive boards inside a workspace
 - [ ] Board-level permissions: Admin, Member, Viewer
 
+
+
 ### Kanban View
+
 - [ ] Create / rename / delete lists (columns)
 - [ ] Create / edit / delete cards
 - [ ] Drag-and-drop cards between lists (real-time synced to all open clients)
 - [ ] Drag-and-drop reorder lists
 - [ ] Card quick-add (click + at bottom of list, type, Enter)
 
+
+
 ### List View
+
 - [ ] Same cards displayed as sortable table rows
 - [ ] Sort by: due date, assignee, label, creation date
 - [ ] Inline edit: title, due date, assignee
 
+
+
 ### Card Detail (Modal)
+
 - [ ] Title (editable inline)
 - [ ] Description (Markdown, rendered on view)
 - [ ] Assignees (multi-select from workspace members)
@@ -58,26 +78,38 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 - [ ] Activity log (auto-generated: "John moved this card", "Sarah added attachment")
 - [ ] Comments (text only for v1)
 
+
+
 ### Real-Time Sync
+
 - [ ] Card moved → all clients update instantly
 - [ ] Card created/deleted → reflected immediately
 - [ ] Card title edited → live update
 - [ ] Presence indicators: show which members have a board open
 
+
+
 ### Notifications (In-App Only for v1)
+
 - [ ] Assigned to a card
 - [ ] Card due date within 24 hours
 - [ ] Someone comments on a card you're assigned to
 - [ ] Notification bell in navbar with unread count
 
+
+
 ### Admin Panel
+
 - [ ] Manage workspace members (invite, remove, change role)
 - [ ] View storage usage (attachment sizes)
 - [ ] Server info (version, uptime, DB size)
 
 ---
 
+
+
 ## Out of Scope for V1 (Do Not Build)
+
 - Email notifications (SMTP)
 - Calendar view
 - Gantt / Timeline view
@@ -91,9 +123,14 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 
 ---
 
+
+
 ## Database Schema
 
+
+
 ### users
+
 ```sql
 CREATE TABLE users (
   id          TEXT PRIMARY KEY,  -- UUID
@@ -106,7 +143,10 @@ CREATE TABLE users (
 );
 ```
 
+
+
 ### workspaces
+
 ```sql
 CREATE TABLE workspaces (
   id         TEXT PRIMARY KEY,
@@ -117,7 +157,10 @@ CREATE TABLE workspaces (
 );
 ```
 
+
+
 ### workspace_members
+
 ```sql
 CREATE TABLE workspace_members (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -128,7 +171,10 @@ CREATE TABLE workspace_members (
 );
 ```
 
+
+
 ### boards
+
 ```sql
 CREATE TABLE boards (
   id           TEXT PRIMARY KEY,
@@ -141,7 +187,10 @@ CREATE TABLE boards (
 );
 ```
 
+
+
 ### lists
+
 ```sql
 CREATE TABLE lists (
   id         TEXT PRIMARY KEY,
@@ -153,7 +202,10 @@ CREATE TABLE lists (
 );
 ```
 
+
+
 ### cards
+
 ```sql
 CREATE TABLE cards (
   id          TEXT PRIMARY KEY,
@@ -169,7 +221,10 @@ CREATE TABLE cards (
 );
 ```
 
+
+
 ### card_assignees
+
 ```sql
 CREATE TABLE card_assignees (
   card_id TEXT NOT NULL REFERENCES cards(id),
@@ -178,7 +233,10 @@ CREATE TABLE card_assignees (
 );
 ```
 
+
+
 ### labels
+
 ```sql
 CREATE TABLE labels (
   id       TEXT PRIMARY KEY,
@@ -188,7 +246,10 @@ CREATE TABLE labels (
 );
 ```
 
+
+
 ### card_labels
+
 ```sql
 CREATE TABLE card_labels (
   card_id  TEXT NOT NULL REFERENCES cards(id),
@@ -197,7 +258,10 @@ CREATE TABLE card_labels (
 );
 ```
 
+
+
 ### attachments
+
 ```sql
 CREATE TABLE attachments (
   id          TEXT PRIMARY KEY,
@@ -210,7 +274,10 @@ CREATE TABLE attachments (
 );
 ```
 
+
+
 ### time_entries
+
 ```sql
 CREATE TABLE time_entries (
   id          TEXT PRIMARY KEY,
@@ -222,7 +289,10 @@ CREATE TABLE time_entries (
 );
 ```
 
+
+
 ### comments
+
 ```sql
 CREATE TABLE comments (
   id         TEXT PRIMARY KEY,
@@ -234,7 +304,10 @@ CREATE TABLE comments (
 );
 ```
 
+
+
 ### activity_log
+
 ```sql
 CREATE TABLE activity_log (
   id         TEXT PRIMARY KEY,
@@ -247,7 +320,10 @@ CREATE TABLE activity_log (
 );
 ```
 
+
+
 ### notifications
+
 ```sql
 CREATE TABLE notifications (
   id         TEXT PRIMARY KEY,
@@ -259,7 +335,10 @@ CREATE TABLE notifications (
 );
 ```
 
+
+
 ### refresh_tokens
+
 ```sql
 CREATE TABLE refresh_tokens (
   id         TEXT PRIMARY KEY,
@@ -272,9 +351,14 @@ CREATE TABLE refresh_tokens (
 
 ---
 
+
+
 ## API Routes
 
+
+
 ### Auth
+
 ```
 POST   /api/auth/register
 POST   /api/auth/login
@@ -283,7 +367,10 @@ POST   /api/auth/refresh
 GET    /api/auth/me
 ```
 
+
+
 ### Workspaces
+
 ```
 GET    /api/workspaces
 POST   /api/workspaces
@@ -295,7 +382,10 @@ DELETE /api/workspaces/:id/members/:userId
 PATCH  /api/workspaces/:id/members/:userId/role
 ```
 
+
+
 ### Boards
+
 ```
 GET    /api/workspaces/:workspaceId/boards
 POST   /api/workspaces/:workspaceId/boards
@@ -304,7 +394,10 @@ PATCH  /api/boards/:id
 DELETE /api/boards/:id
 ```
 
+
+
 ### Lists
+
 ```
 GET    /api/boards/:boardId/lists
 POST   /api/boards/:boardId/lists
@@ -313,7 +406,10 @@ DELETE /api/lists/:id
 PATCH  /api/lists/:id/position
 ```
 
+
+
 ### Cards
+
 ```
 GET    /api/lists/:listId/cards
 POST   /api/lists/:listId/cards
@@ -327,21 +423,30 @@ POST   /api/cards/:id/labels
 DELETE /api/cards/:id/labels/:labelId
 ```
 
+
+
 ### Attachments
+
 ```
 POST   /api/cards/:id/attachments
 GET    /api/attachments/:id/download
 DELETE /api/attachments/:id
 ```
 
+
+
 ### Time Entries
+
 ```
 GET    /api/cards/:id/time-entries
 POST   /api/cards/:id/time-entries
 DELETE /api/time-entries/:id
 ```
 
+
+
 ### Comments
+
 ```
 GET    /api/cards/:id/comments
 POST   /api/cards/:id/comments
@@ -349,7 +454,10 @@ PATCH  /api/comments/:id
 DELETE /api/comments/:id
 ```
 
+
+
 ### Labels
+
 ```
 GET    /api/boards/:boardId/labels
 POST   /api/boards/:boardId/labels
@@ -357,34 +465,49 @@ PATCH  /api/labels/:id
 DELETE /api/labels/:id
 ```
 
+
+
 ### Notifications
+
 ```
 GET    /api/notifications
 PATCH  /api/notifications/:id/read
 POST   /api/notifications/read-all
 ```
 
+
+
 ### Admin
+
 ```
 GET    /api/admin/info
 GET    /api/admin/storage
 ```
 
+
+
 ### WebSocket
+
 ```
 WS     /ws?token=<jwt>
 ```
 
 ---
 
+
+
 ## WebSocket Event Protocol
 
 All events are JSON. Every event has:
+
 ```json
 { "type": "EVENT_TYPE", "payload": { ... } }
 ```
 
+
+
 ### Server → Client Events
+
 ```
 CARD_CREATED       { card }
 CARD_UPDATED       { card }
@@ -400,13 +523,18 @@ PRESENCE_UPDATE    { boardId, activeUsers: [userId] }
 NOTIFICATION       { notification }
 ```
 
+
+
 ### Client → Server Events
+
 ```
 JOIN_BOARD         { boardId }
 LEAVE_BOARD        { boardId }
 ```
 
 ---
+
+
 
 ## File Structure
 
@@ -471,6 +599,8 @@ zeroboard/
 
 ---
 
+
+
 ## Environment Variables (.env.example)
 
 ```env
@@ -484,7 +614,7 @@ JWT_EXPIRY_MINUTES=15
 REFRESH_TOKEN_EXPIRY_DAYS=30
 
 # Database
-DATABASE_URL=sqlite://data/zeroboard.db
+DATABASE_URL=sqlite://backend/data/zeroboard.db
 
 # Storage
 ATTACHMENTS_DIR=data/attachments
@@ -497,9 +627,12 @@ FIRST_USER_IS_ADMIN=true
 
 ---
 
+
+
 ## Definition of Done — V1
 
 The app is considered v1-complete when:
+
 1. A fresh binary dropped on a Ubuntu VPS starts with no other dependencies
 2. First user registers and becomes admin
 3. Can invite 2–4 teammates by email (they register via invite link)
@@ -513,6 +646,8 @@ The app is considered v1-complete when:
 
 ---
 
+
+
 ## Performance Targets
 
 - Binary size: < 30MB
@@ -520,3 +655,4 @@ The app is considered v1-complete when:
 - RAM at idle (5 users): < 80MB
 - WebSocket message latency: < 50ms on local network
 - SQLite WAL mode enabled from first migration
+

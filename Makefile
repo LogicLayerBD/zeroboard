@@ -1,10 +1,10 @@
-.PHONY: dev build release clean frontend backend
+.PHONY: dev dev-backend dev-frontend release clean frontend backend setup db-reset backup
 
 # ── Dev ──────────────────────────────────────────────────────────────────────
 
 dev:
 	@echo "Starting dev servers..."
-	@make -j2 dev-backend dev-frontend
+	@$(MAKE) -j2 dev-backend dev-frontend
 
 dev-backend:
 	cd backend && cargo watch -x run
@@ -39,7 +39,7 @@ setup:
 # ── Database ──────────────────────────────────────────────────────────────────
 
 db-reset:
-	rm -f data/zeroboard.db data/zeroboard.db-wal data/zeroboard.db-shm
+	rm -f backend/data/zeroboard.db backend/data/zeroboard.db-wal backend/data/zeroboard.db-shm
 	@echo "Database reset. Will be recreated on next start."
 
 backup:
