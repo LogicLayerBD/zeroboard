@@ -1,0 +1,195 @@
+<script lang="ts">
+	import { flip } from 'svelte/animate';
+	import { dndzone, dragHandle, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
+	import * as api from '$lib/api';
+	import { FLIP_DURATION_MS, isShadowItem } from '$lib/dnd';
+	import {
+		applyCardCreated,
+		applyListDeleted,
+		applyListUpdated,
+		setListCards
+	} from '$lib/stores/board.store';
+	import { toastError } from '$lib/stores/toast.store';
+	import type { BoardCard, ListWithCards } from '$lib/types';
+	import KanbanCard from './KanbanCard.svelte';
+
+	const MAX_NAME_CHARS = 255;
+	const MAX_TITLE_CHARS = 500;
+
+	interface Props {
+		list: ListWithCards;
+		canEdit: boolean;
+		onopencard: (cardId: string) => void;
+		ondragstart: (cardId: string, listId: string) => void;
+		ondrop: (cardId: string, listId: string, cards: BoardCard[]) => void;
+	}
+
+	let { list, canEdit, onopencard, ondragstart, ondrop }: Props = $props();
+
+	let renaming = $state(false);
+	let nameDraft = $state('');
+	let adding = $state(false);
+	let titleDraft = $state('');
+	let saving = $state(false);
+
+	function handleConsider(event: CustomEvent<DndEvent<BoardCard>>) {
+		if (event.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
+			ondragstart(event.detail.info.id, list.id);
+		}
+		setListCards(list.id, event.detail.items);
+	}
+
+	function handleFinalize(event: CustomEvent<DndEvent<BoardCard>>) {
+		const { items, info } = event.detail;
+		setListCards(list.id, items);
+		// Finalize fires on both zones; only the zone that now holds the card persists the move.
+		if (items.some((c) => c.id === info.id)) ondrop(info.id, list.id, items);
+	}
+
+	function startRename() {
+		if (!canEdit) return;
+		nameDraft = list.name;
+		renaming = true;
+	}
+
+	async function saveRename() {
+		const name = nameDraft.trim();
+		renaming = false;
+		if (!name || name === list.name) return;
+		try {
+			applyListUpdated(await api.renameList(list.id, name));
+		} catch (err) {
+			toastError(err);
+		}
+	}
+
+	function onRenameKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') void saveRename();
+		if (event.key === 'Escape') renaming = false;
+	}
+
+	async function removeList() {
+		const message =
+			list.cards.length > 0
+				? `Delete "${list.name}" and its ${list.cards.length} card(s)?`
+				: `Delete "${list.name}"?`;
+		if (!confirm(message)) return;
+		try {
+			await api.deleteList(list.id);
+			applyListDeleted(list.id);
+		} catch (err) {
+			toastError(err);
+		}
+	}
+
+	async function addCard(event: SubmitEvent) {
+		event.preventDefault();
+		const title = titleDraft.trim();
+		if (!title || saving) return;
+		saving = true;
+		try {
+			applyCardCreated(await api.createCard(list.id, title));
+			titleDraft = '';
+		} catch (err) {
+			toastError(err);
+		} finally {
+			saving = false;
+		}
+	}
+
+	function onAddKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			adding = false;
+			titleDraft = '';
+		}
+	}
+
+	function autofocus(node: HTMLElement) {
+		node.focus();
+	}
+</script>
+
+<section class="flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100" aria-label={list.name}>
+	<header class="flex items-center gap-1 px-3 pb-1 pt-2">
+		{#if canEdit}
+			<span
+				use:dragHandle
+				class="cursor-grab px-1 text-slate-400 hover:text-slate-600"
+				aria-label="Drag list {list.name}">⋮⋮</span
+			>
+		{/if}
+		{#if renaming}
+			<input
+				class="flex-1 rounded border border-indigo-400 px-1.5 py-0.5 text-sm font-semibold focus:outline-none"
+				maxlength={MAX_NAME_CHARS}
+				bind:value={nameDraft}
+				onblur={saveRename}
+				onkeydown={onRenameKeydown}
+				use:autofocus
+			/>
+		{:else}
+			<button
+				type="button"
+				class="flex-1 truncate text-left text-sm font-semibold text-slate-700"
+				disabled={!canEdit}
+				title={canEdit ? 'Rename list' : list.name}
+				onclick={startRename}>{list.name}</button
+			>
+		{/if}
+		<span class="text-xs text-slate-400">{list.cards.length}</span>
+		{#if canEdit}
+			<button
+				type="button"
+				class="rounded px-1 text-slate-400 hover:bg-slate-200 hover:text-red-600"
+				aria-label="Delete list {list.name}"
+				onclick={removeList}>✕</button
+			>
+		{/if}
+	</header>
+
+	<div
+		class="flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto px-2 py-1"
+		use:dndzone={{
+			items: list.cards,
+			type: 'card',
+			flipDurationMs: FLIP_DURATION_MS,
+			dragDisabled: !canEdit,
+			dropTargetStyle: {}
+		}}
+		onconsider={handleConsider}
+		onfinalize={handleFinalize}
+		aria-label="Cards in {list.name}"
+	>
+		{#each list.cards as card (card.id)}
+			<div animate:flip={{ duration: FLIP_DURATION_MS }} class={isShadowItem(card) ? 'opacity-40' : ''}>
+				<KanbanCard {card} onopen={onopencard} />
+			</div>
+		{/each}
+	</div>
+
+	{#if canEdit}
+		<div class="p-2">
+			{#if adding}
+				<form onsubmit={addCard}>
+					<input
+						class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+						placeholder="Card title, then Enter"
+						maxlength={MAX_TITLE_CHARS}
+						bind:value={titleDraft}
+						onkeydown={onAddKeydown}
+						onblur={() => {
+							if (!titleDraft.trim()) adding = false;
+						}}
+						use:autofocus
+					/>
+				</form>
+			{:else}
+				<button
+					type="button"
+					class="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-500 hover:bg-slate-200"
+					onclick={() => (adding = true)}>+ Add card</button
+				>
+			{/if}
+		</div>
+	{/if}
+</section>
