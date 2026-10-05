@@ -1,6 +1,7 @@
 mod config;
 mod db;
 mod errors;
+mod models;
 
 use std::net::SocketAddr;
 
@@ -9,7 +10,7 @@ use axum::extract::State;
 use axum::http::{HeaderName, Request, StatusCode};
 use axum::routing::get;
 use axum::Router;
-use sqlx::{Connection, SqlitePool};
+use sqlx::SqlitePool;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
@@ -22,7 +23,10 @@ const DEFAULT_LOG_FILTER: &str = "zeroboard=info,tower_http=info";
 
 #[derive(Clone)]
 pub struct AppState {
+    /// Write pool: all INSERT/UPDATE/DELETE (and reads that must see in-transaction writes).
     pub db: SqlitePool,
+    /// Read-only pool: SELECT-only queries.
+    pub read_db: SqlitePool,
     pub config: Config,
 }
 
@@ -48,9 +52,15 @@ async fn main() -> anyhow::Result<()> {
             )
         })?;
 
-    let db = db::connect(&config.database_url).await?;
+    let write_pool = db::connect(&config.database_url).await?;
+    db::run_migrations(&write_pool).await?;
+    let read_pool = db::create_read_pool(&config.database_url).await?;
     let addr = SocketAddr::new(config.host, config.port);
-    let state = AppState { db, config };
+    let state = AppState {
+        db: write_pool,
+        read_db: read_pool,
+        config,
+    };
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -108,18 +118,23 @@ async fn ready(State(state): State<AppState>) -> StatusCode {
 }
 
 async fn check_ready(state: &AppState) -> anyhow::Result<()> {
-    let mut conn = state
-        .db
-        .acquire()
-        .await
-        .context("failed to acquire db connection")?;
-    conn.ping().await.context("db ping failed")?;
+    probe_pool(&state.db).await.context("write pool unavailable")?;
+    probe_pool(&state.read_db).await.context("read pool unavailable")?;
 
     let attachments = tokio::fs::metadata(&state.config.attachments_dir)
         .await
         .context("attachments dir unavailable")?;
     anyhow::ensure!(attachments.is_dir(), "attachments path is not a directory");
 
+    Ok(())
+}
+
+async fn probe_pool(pool: &SqlitePool) -> anyhow::Result<()> {
+    let one: i64 = sqlx::query_scalar("SELECT 1")
+        .fetch_one(pool)
+        .await
+        .context("SELECT 1 failed")?;
+    anyhow::ensure!(one == 1, "SELECT 1 returned {one}");
     Ok(())
 }
 
@@ -159,6 +174,7 @@ mod tests {
 
     async fn test_state(attachments_dir: PathBuf) -> AppState {
         let db = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let read_db = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let config = Config {
             host: "127.0.0.1".parse().unwrap(),
             port: 0,
@@ -171,7 +187,11 @@ mod tests {
             app_name: "ZeroBoard".into(),
             first_user_is_admin: true,
         };
-        AppState { db, config }
+        AppState {
+            db,
+            read_db,
+            config,
+        }
     }
 
     async fn get_status(state: AppState, uri: &str) -> (StatusCode, Option<String>) {
@@ -210,6 +230,14 @@ mod tests {
     async fn ready_fails_when_db_closed() {
         let state = test_state(std::env::temp_dir()).await;
         state.db.close().await;
+        let (status, _) = get_status(state, "/ready").await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn ready_fails_when_read_db_closed() {
+        let state = test_state(std::env::temp_dir()).await;
+        state.read_db.close().await;
         let (status, _) = get_status(state, "/ready").await;
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     }

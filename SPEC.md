@@ -163,8 +163,8 @@ CREATE TABLE workspaces (
 
 ```sql
 CREATE TABLE workspace_members (
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-  user_id      TEXT NOT NULL REFERENCES users(id),
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role         TEXT NOT NULL CHECK(role IN ('admin','member','viewer')),
   joined_at    INTEGER NOT NULL,
   PRIMARY KEY (workspace_id, user_id)
@@ -178,7 +178,7 @@ CREATE TABLE workspace_members (
 ```sql
 CREATE TABLE boards (
   id           TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL, -- NULL once workspace is deleted
   name         TEXT NOT NULL,
   archived     INTEGER NOT NULL DEFAULT 0,
   created_by   TEXT NOT NULL REFERENCES users(id),
@@ -209,7 +209,7 @@ CREATE TABLE lists (
 ```sql
 CREATE TABLE cards (
   id          TEXT PRIMARY KEY,
-  list_id     TEXT NOT NULL REFERENCES lists(id),
+  list_id     TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
   board_id    TEXT NOT NULL REFERENCES boards(id),
   title       TEXT NOT NULL,
   description TEXT,
@@ -227,8 +227,8 @@ CREATE TABLE cards (
 
 ```sql
 CREATE TABLE card_assignees (
-  card_id TEXT NOT NULL REFERENCES cards(id),
-  user_id TEXT NOT NULL REFERENCES users(id),
+  card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   PRIMARY KEY (card_id, user_id)
 );
 ```
@@ -252,8 +252,8 @@ CREATE TABLE labels (
 
 ```sql
 CREATE TABLE card_labels (
-  card_id  TEXT NOT NULL REFERENCES cards(id),
-  label_id TEXT NOT NULL REFERENCES labels(id),
+  card_id  TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  label_id TEXT NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
   PRIMARY KEY (card_id, label_id)
 );
 ```
@@ -265,7 +265,7 @@ CREATE TABLE card_labels (
 ```sql
 CREATE TABLE attachments (
   id          TEXT PRIMARY KEY,
-  card_id     TEXT NOT NULL REFERENCES cards(id),
+  card_id     TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   filename    TEXT NOT NULL,
   stored_path TEXT NOT NULL,
   size_bytes  INTEGER NOT NULL,
@@ -281,7 +281,7 @@ CREATE TABLE attachments (
 ```sql
 CREATE TABLE time_entries (
   id          TEXT PRIMARY KEY,
-  card_id     TEXT NOT NULL REFERENCES cards(id),
+  card_id     TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   user_id     TEXT NOT NULL REFERENCES users(id),
   minutes     INTEGER NOT NULL,
   description TEXT,
@@ -296,7 +296,7 @@ CREATE TABLE time_entries (
 ```sql
 CREATE TABLE comments (
   id         TEXT PRIMARY KEY,
-  card_id    TEXT NOT NULL REFERENCES cards(id),
+  card_id    TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   user_id    TEXT NOT NULL REFERENCES users(id),
   body       TEXT NOT NULL,
   created_at INTEGER NOT NULL,
@@ -311,7 +311,7 @@ CREATE TABLE comments (
 ```sql
 CREATE TABLE activity_log (
   id         TEXT PRIMARY KEY,
-  card_id    TEXT REFERENCES cards(id),
+  card_id    TEXT REFERENCES cards(id) ON DELETE SET NULL,
   board_id   TEXT REFERENCES boards(id),
   user_id    TEXT NOT NULL REFERENCES users(id),
   action     TEXT NOT NULL,  -- e.g. "moved_card", "added_attachment"
@@ -327,7 +327,7 @@ CREATE TABLE activity_log (
 ```sql
 CREATE TABLE notifications (
   id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id),
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type       TEXT NOT NULL,
   payload    TEXT NOT NULL,  -- JSON
   read       INTEGER NOT NULL DEFAULT 0,
@@ -342,11 +342,28 @@ CREATE TABLE notifications (
 ```sql
 CREATE TABLE refresh_tokens (
   id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id),
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+```
+
+
+
+### Indexes
+
+Every foreign key not already covered by a primary key is indexed (see
+`backend/src/db/migrations/0001_initial.sql`). Notable composite/unique indexes:
+
+```sql
+CREATE INDEX idx_lists_board_id ON lists(board_id, position);
+CREATE INDEX idx_cards_list_id ON cards(list_id, position);
+CREATE INDEX idx_comments_card_id ON comments(card_id, created_at);
+CREATE INDEX idx_activity_log_card_id ON activity_log(card_id, created_at);
+CREATE INDEX idx_activity_log_board_id ON activity_log(board_id, created_at);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id, created_at);
+CREATE UNIQUE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 ```
 
 ---
@@ -376,6 +393,10 @@ GET    /api/workspaces
 POST   /api/workspaces
 PATCH  /api/workspaces/:id
 DELETE /api/workspaces/:id
+- Archives all boards in the workspace first
+- Then hard deletes the workspace and its members
+- Requires admin role
+
 GET    /api/workspaces/:id/members
 POST   /api/workspaces/:id/members/invite
 DELETE /api/workspaces/:id/members/:userId
@@ -656,3 +677,10 @@ The app is considered v1-complete when:
 - WebSocket message latency: < 50ms on local network
 - SQLite WAL mode enabled from first migration
 
+
+## Known Limitations (V1)
+- Boards archived via workspace deletion are unreachable through 
+  the API. Recovery requires direct database access. 
+  A future admin panel endpoint will list all archived boards.
+
+  
