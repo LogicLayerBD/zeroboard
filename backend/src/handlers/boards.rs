@@ -326,6 +326,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_includes_card_assignee_and_label_ids() {
+        let f = super::super::test_support::BoardFixture::new().await;
+        let tagged = f.card("Tagged").await;
+        let plain = f.card("Plain").await;
+        f.assign(&tagged, &f.member.id).await;
+        f.assign(&tagged, &f.viewer.id).await;
+        let (status, label) = f
+            .t
+            .post(
+                &format!("/api/boards/{}/labels", f.board_id),
+                &f.admin,
+                json!({ "name": "Bug", "color": "#ff0000" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{label}");
+        let label_id = label["id"].as_str().unwrap();
+        let (status, body) = f
+            .t
+            .post(
+                &format!("/api/cards/{tagged}/labels"),
+                &f.member,
+                json!({ "label_id": label_id }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+
+        let (status, details) = f.t.get(&format!("/api/boards/{}", f.board_id), &f.viewer).await;
+        assert_eq!(status, StatusCode::OK);
+        let cards: Vec<&Value> = details["lists"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|list| list["cards"].as_array().unwrap())
+            .collect();
+        let card = |id: &str| *cards.iter().find(|c| c["id"] == id).unwrap();
+
+        let mut expected_assignees = vec![f.member.id.as_str(), f.viewer.id.as_str()];
+        expected_assignees.sort_unstable();
+        assert_eq!(card(&tagged)["assignee_ids"], json!(expected_assignees));
+        assert_eq!(card(&tagged)["label_ids"], json!([label_id]));
+        assert_eq!(card(&plain)["assignee_ids"], json!([]));
+        assert_eq!(card(&plain)["label_ids"], json!([]));
+        assert_eq!(card(&tagged)["title"], "Tagged");
+
+        f.t.cleanup().await;
+    }
+
+    #[tokio::test]
     async fn rename_is_admin_only() {
         let f = fixture().await;
         let board = board_id(&f, "Old").await;

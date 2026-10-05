@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.card_id AS \"card_id!\", a.user_id AS \"user_id!\"\n           FROM card_assignees a\n           JOIN cards c ON c.id = a.card_id\n           WHERE c.board_id = $1\n           ORDER BY a.user_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "card_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "837f0e3582dfa1abcc318a4f657e79d48ce4810a426a5a88d40e24a98df42a2c"
+}

@@ -8,12 +8,21 @@ use crate::errors::AppError;
 use crate::models::{Board, Card, List};
 use crate::AppState;
 
+/// A card with just enough relations for board previews and list-view sorting.
+#[derive(Debug, Serialize)]
+pub struct BoardCard {
+    #[serde(flatten)]
+    pub card: Card,
+    pub assignee_ids: Vec<String>,
+    pub label_ids: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ListWithCards {
     #[serde(flatten)]
     pub list: List,
     /// Ordered by position.
-    pub cards: Vec<Card>,
+    pub cards: Vec<BoardCard>,
 }
 
 #[derive(Debug, Serialize)]
@@ -103,12 +112,47 @@ pub async fn details(state: &AppState, board: Board) -> Result<BoardDetails, App
     .fetch_all(&state.read_db)
     .await?;
 
-    let mut cards_by_list: HashMap<String, Vec<Card>> = HashMap::new();
+    let assignees = sqlx::query!(
+        r#"SELECT a.card_id AS "card_id!", a.user_id AS "user_id!"
+           FROM card_assignees a
+           JOIN cards c ON c.id = a.card_id
+           WHERE c.board_id = $1
+           ORDER BY a.user_id"#,
+        board.id
+    )
+    .fetch_all(&state.read_db)
+    .await?;
+    let mut assignees_by_card: HashMap<String, Vec<String>> = HashMap::new();
+    for row in assignees {
+        assignees_by_card.entry(row.card_id).or_default().push(row.user_id);
+    }
+
+    let labels = sqlx::query!(
+        r#"SELECT cl.card_id AS "card_id!", cl.label_id AS "label_id!"
+           FROM card_labels cl
+           JOIN cards c ON c.id = cl.card_id
+           WHERE c.board_id = $1
+           ORDER BY cl.label_id"#,
+        board.id
+    )
+    .fetch_all(&state.read_db)
+    .await?;
+    let mut labels_by_card: HashMap<String, Vec<String>> = HashMap::new();
+    for row in labels {
+        labels_by_card.entry(row.card_id).or_default().push(row.label_id);
+    }
+
+    let mut cards_by_list: HashMap<String, Vec<BoardCard>> = HashMap::new();
     for card in cards {
+        let board_card = BoardCard {
+            assignee_ids: assignees_by_card.remove(&card.id).unwrap_or_default(),
+            label_ids: labels_by_card.remove(&card.id).unwrap_or_default(),
+            card,
+        };
         cards_by_list
-            .entry(card.list_id.clone())
+            .entry(board_card.card.list_id.clone())
             .or_default()
-            .push(card);
+            .push(board_card);
     }
     let lists = lists
         .into_iter()
