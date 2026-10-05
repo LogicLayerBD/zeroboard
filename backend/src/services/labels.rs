@@ -1,4 +1,5 @@
 use super::is_foreign_key_violation;
+use crate::db;
 use crate::errors::AppError;
 use crate::models::Label;
 use crate::AppState;
@@ -34,8 +35,9 @@ pub async fn create(
         name,
         color
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let label = match inserted {
         Ok(label) => label,
@@ -62,8 +64,9 @@ pub async fn update(
         color,
         label_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%label_id, "label updated");

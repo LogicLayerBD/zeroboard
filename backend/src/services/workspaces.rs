@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::{is_foreign_key_violation, is_unique_violation, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Workspace, WorkspaceRole};
 use crate::ws::events;
@@ -90,8 +91,9 @@ pub async fn rename(
         now,
         workspace_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%workspace_id, "workspace renamed");

@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::{is_foreign_key_violation, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::TimeEntry;
 use crate::AppState;
@@ -71,8 +72,9 @@ pub async fn create(
         description,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let time_entry = match inserted {
         Ok(entry) => entry,

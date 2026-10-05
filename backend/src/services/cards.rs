@@ -3,6 +3,7 @@ use serde_json::json;
 
 use super::positions::{reposition, slot_after, Sibling, POSITION_STEP};
 use super::{activity, is_foreign_key_violation, is_unique_violation, notifications, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Attachment, Card, CardAssignee, CardLabel, Comment, Label, TimeEntry};
 use crate::ws::events;
@@ -94,8 +95,9 @@ pub async fn create(
         user_id,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let card = match inserted {
         Ok(card) => card,
@@ -220,8 +222,9 @@ pub async fn update(
         now,
         card_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%card_id, %actor_id, "card updated");

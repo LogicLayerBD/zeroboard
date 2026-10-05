@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 use super::{is_foreign_key_violation, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Board, Card, List};
 use crate::AppState;
@@ -63,8 +64,9 @@ pub async fn create(
         now,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let board = match inserted {
         Ok(board) => board,
@@ -132,8 +134,9 @@ pub async fn rename(state: &AppState, board_id: &str, name: &str) -> Result<Boar
         now,
         board_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%board_id, "board renamed");

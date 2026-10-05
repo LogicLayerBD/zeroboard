@@ -1,5 +1,6 @@
 use super::positions::{reposition, slot_after, Sibling, POSITION_STEP};
 use super::{cards, is_foreign_key_violation, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::List;
 use crate::ws::events;
@@ -40,8 +41,9 @@ pub async fn create(state: &AppState, board_id: &str, name: &str) -> Result<List
         POSITION_STEP,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let list = match inserted {
         Ok(list) => list,
@@ -68,8 +70,9 @@ pub async fn rename(state: &AppState, list_id: &str, name: &str) -> Result<List,
         now,
         list_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%list_id, "list renamed");

@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::{activity, is_foreign_key_violation, notifications, now_ms};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Card, Comment};
 use crate::AppState;
@@ -55,8 +56,9 @@ pub async fn create(
         body,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     let comment = match inserted {
         Ok(comment) => comment,
@@ -90,8 +92,9 @@ pub async fn update(state: &AppState, comment_id: &str, body: &str) -> Result<Co
         now,
         comment_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%comment_id, "comment updated");

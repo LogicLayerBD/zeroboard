@@ -71,6 +71,21 @@ pub async fn create_read_pool(database_url: &str) -> anyhow::Result<SqlitePool> 
         .context("failed to connect read pool to database")
 }
 
+/// For `INSERT/UPDATE/DELETE ... RETURNING` on the write pool, use
+/// `.fetch_all(&state.db).await.and_then(db::single_row)` instead of `fetch_one`
+/// (or `.map(db::first_row)` instead of `fetch_optional`). sqlx's SQLite worker hands
+/// back the first row before the statement finishes, and an autocommit write only
+/// commits when it finishes, so a read-pool query issued right after `fetch_one`
+/// can miss the write. Draining every row waits for the commit.
+pub fn single_row<T>(rows: Vec<T>) -> Result<T, sqlx::Error> {
+    rows.into_iter().next().ok_or(sqlx::Error::RowNotFound)
+}
+
+/// See [`single_row`].
+pub fn first_row<T>(rows: Vec<T>) -> Option<T> {
+    rows.into_iter().next()
+}
+
 fn read_only_url(database_url: &str) -> String {
     let separator = if database_url.contains('?') { '&' } else { '?' };
     format!("{database_url}{separator}{READ_ONLY_MODE_PARAM}")
@@ -247,6 +262,40 @@ mod tests {
             file
         };
         assert_eq!(file_of(db.pool.clone()).await, file_of(read.clone()).await);
+
+        read.close().await;
+        db.cleanup().await;
+    }
+
+    /// Enough rounds that the `fetch_one` race reliably shows up (it misses dozens).
+    const VISIBILITY_ROUNDS: i64 = 500;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn drained_returning_write_is_visible_to_read_pool() {
+        let db = TempDb::new().await;
+        let read = create_read_pool(&db.url).await.unwrap();
+
+        let mut stale = 0;
+        for round in 1..=VISIBILITY_ROUNDS {
+            let id = format!("u{round}");
+            let returned: String = sqlx::query_scalar(
+                "INSERT INTO users (id, email, name, password, created_at, updated_at) \
+                 VALUES ($1, $1 || '@b.c', 'N', 'hash', 0, 0) RETURNING id",
+            )
+            .bind(&id)
+            .fetch_all(&db.pool)
+            .await
+            .and_then(single_row)
+            .unwrap();
+            assert_eq!(returned, id);
+            if count(&read, "users").await != round {
+                stale += 1;
+            }
+        }
+        assert_eq!(
+            stale, 0,
+            "read pool missed {stale} of {VISIBILITY_ROUNDS} committed writes"
+        );
 
         read.close().await;
         db.cleanup().await;

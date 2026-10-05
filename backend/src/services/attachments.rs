@@ -13,6 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use super::{activity, is_foreign_key_violation, now_ms};
 use crate::config::Config;
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Attachment, Card};
 use crate::AppState;
@@ -284,8 +285,9 @@ async fn store(
         user_id,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     match inserted {
         Ok(attachment) => Ok(attachment),

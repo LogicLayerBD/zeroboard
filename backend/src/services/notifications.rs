@@ -4,6 +4,7 @@
 use serde_json::json;
 
 use super::now_ms;
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{Card, Notification};
 use crate::ws::events;
@@ -49,8 +50,9 @@ pub async fn mark_read(
         notification_id,
         user_id
     )
-    .fetch_optional(&state.db)
-    .await?
+    .fetch_all(&state.db)
+    .await
+    .map(db::first_row)?
     .ok_or(AppError::NotFound)?;
     Ok(notification)
 }

@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 use anyhow::Context;
 
 use crate::auth::{jwt, BCRYPT_COST};
+use crate::db;
 use crate::errors::AppError;
 use crate::models::{RefreshToken, User, UserRole};
 use crate::AppState;
@@ -78,8 +79,9 @@ pub async fn register(
         now,
         now
     )
-    .fetch_one(&state.db)
-    .await;
+    .fetch_all(&state.db)
+    .await
+    .and_then(db::single_row);
 
     match inserted {
         Ok(user) => {
