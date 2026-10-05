@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO activity_log (id, card_id, board_id, user_id, action, payload, created_at)\n         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "f536bbc486817b8bfba2a983d00a6b70e6eab13311986dce08560139b06a3235"
+}

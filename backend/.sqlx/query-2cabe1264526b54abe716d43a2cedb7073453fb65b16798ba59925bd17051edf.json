@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM card_labels WHERE card_id = $1 AND label_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "2cabe1264526b54abe716d43a2cedb7073453fb65b16798ba59925bd17051edf"
+}

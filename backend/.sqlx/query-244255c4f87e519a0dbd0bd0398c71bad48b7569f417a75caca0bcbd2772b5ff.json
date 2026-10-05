@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM comments WHERE card_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "244255c4f87e519a0dbd0bd0398c71bad48b7569f417a75caca0bcbd2772b5ff"
+}

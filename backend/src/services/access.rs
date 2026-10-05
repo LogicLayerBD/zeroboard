@@ -2,7 +2,7 @@
 //! caller may not touch is 403.
 
 use crate::errors::AppError;
-use crate::models::{Board, WorkspaceRole};
+use crate::models::{Board, Card, Label, List, WorkspaceRole};
 use crate::AppState;
 
 /// Requires the workspace to exist and `user_id` to hold at least `required` in it.
@@ -61,6 +61,73 @@ pub async fn require_board_role(
 
     ensure_role(role, required, workspace_id, user_id)?;
     Ok(board)
+}
+
+/// Loads a list on a live board and requires `user_id` to hold at least `required` there.
+pub async fn require_list_role(
+    state: &AppState,
+    list_id: &str,
+    user_id: &str,
+    required: WorkspaceRole,
+) -> Result<List, AppError> {
+    let list = sqlx::query_as!(
+        List,
+        r#"SELECT id AS "id!", board_id, name, position, created_at, updated_at
+           FROM lists
+           WHERE id = $1"#,
+        list_id
+    )
+    .fetch_optional(&state.read_db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    require_board_role(state, &list.board_id, user_id, required).await?;
+    Ok(list)
+}
+
+/// Loads a card on a live board and requires `user_id` to hold at least `required` there.
+pub async fn require_card_role(
+    state: &AppState,
+    card_id: &str,
+    user_id: &str,
+    required: WorkspaceRole,
+) -> Result<Card, AppError> {
+    let card = sqlx::query_as!(
+        Card,
+        r#"SELECT id AS "id!", list_id, board_id, title, description, position, due_date,
+                  created_by, created_at, updated_at
+           FROM cards
+           WHERE id = $1"#,
+        card_id
+    )
+    .fetch_optional(&state.read_db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    require_board_role(state, &card.board_id, user_id, required).await?;
+    Ok(card)
+}
+
+/// Loads a label on a live board and requires `user_id` to hold at least `required` there.
+pub async fn require_label_role(
+    state: &AppState,
+    label_id: &str,
+    user_id: &str,
+    required: WorkspaceRole,
+) -> Result<Label, AppError> {
+    let label = sqlx::query_as!(
+        Label,
+        r#"SELECT id AS "id!", board_id, name, color
+           FROM labels
+           WHERE id = $1"#,
+        label_id
+    )
+    .fetch_optional(&state.read_db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    require_board_role(state, &label.board_id, user_id, required).await?;
+    Ok(label)
 }
 
 fn ensure_role(

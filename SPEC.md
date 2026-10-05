@@ -695,5 +695,7 @@ The app is considered v1-complete when:
   post-v1 addition.
 - GET /api/workspaces does not include the caller's role. 
   Fetch /api/workspaces/:id/members to get role information.
+- Duplicate assignee/label additions return 400 instead of 409. 
+  AppError has no Conflict variant in v1.
 
   

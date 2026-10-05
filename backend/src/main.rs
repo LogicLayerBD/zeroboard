@@ -108,6 +108,9 @@ fn router(state: AppState) -> Router {
         .merge(handlers::auth::router(&state))
         .merge(handlers::workspaces::router(&state))
         .merge(handlers::boards::router(&state))
+        .merge(handlers::lists::router(&state))
+        .merge(handlers::cards::router(&state))
+        .merge(handlers::labels::router(&state))
         .fallback(|| async { AppError::NotFound })
         .with_state(state)
         .layer(

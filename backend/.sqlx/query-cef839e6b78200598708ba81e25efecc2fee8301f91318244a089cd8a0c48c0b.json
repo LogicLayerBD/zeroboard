@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.id AS \"user_id!\", u.name, u.email, u.avatar_color\n           FROM card_assignees a\n           JOIN users u ON u.id = a.user_id\n           WHERE a.card_id = $1\n           ORDER BY u.name, u.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "email",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "avatar_color",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cef839e6b78200598708ba81e25efecc2fee8301f91318244a089cd8a0c48c0b"
+}

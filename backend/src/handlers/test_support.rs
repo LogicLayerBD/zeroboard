@@ -154,9 +154,56 @@ impl TestApp {
         assert_eq!(status, StatusCode::CREATED, "invite failed: {body}");
     }
 
+    /// Creates a board in the workspace and returns its id.
+    pub async fn board(&self, owner: &TestUser, workspace_id: &str, name: &str) -> String {
+        let (status, body) = self
+            .post(
+                &format!("/api/workspaces/{workspace_id}/boards"),
+                owner,
+                serde_json::json!({ "name": name }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "create board failed: {body}");
+        body["id"].as_str().unwrap().to_string()
+    }
+
     pub async fn cleanup(self) {
         self.state.db.close().await;
         self.state.read_db.close().await;
         let _ = tokio::fs::remove_dir_all(&self.dir).await;
+    }
+}
+
+/// A workspace with one board, a user for every workspace role, and an outsider.
+pub struct BoardFixture {
+    pub t: TestApp,
+    pub admin: TestUser,
+    pub member: TestUser,
+    pub viewer: TestUser,
+    pub outsider: TestUser,
+    pub workspace_id: String,
+    pub board_id: String,
+}
+
+impl BoardFixture {
+    pub async fn new() -> Self {
+        let t = TestApp::new().await;
+        let admin = t.user("admin@example.com").await;
+        let member = t.user("member@example.com").await;
+        let viewer = t.user("viewer@example.com").await;
+        let outsider = t.user("outsider@example.com").await;
+        let workspace_id = t.workspace(&admin, "W").await;
+        t.add_member(&workspace_id, &admin, &member, "member").await;
+        t.add_member(&workspace_id, &admin, &viewer, "viewer").await;
+        let board_id = t.board(&admin, &workspace_id, "B").await;
+        Self {
+            t,
+            admin,
+            member,
+            viewer,
+            outsider,
+            workspace_id,
+            board_id,
+        }
     }
 }

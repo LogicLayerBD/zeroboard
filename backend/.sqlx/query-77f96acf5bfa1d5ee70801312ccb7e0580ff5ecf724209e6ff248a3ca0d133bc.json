@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO time_entries (id, card_id, user_id, minutes, logged_at)\n             VALUES ($1, $2, $3, 30, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "77f96acf5bfa1d5ee70801312ccb7e0580ff5ecf724209e6ff248a3ca0d133bc"
+}

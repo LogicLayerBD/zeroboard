@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO card_labels (card_id, label_id) VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "08c4a4fd869904fa8be73a1a9c7e329e7ba652ff538e357a0ec510f1347e3f1e"
+}

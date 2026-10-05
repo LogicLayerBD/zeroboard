@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM card_assignees WHERE card_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f1732e5d1f9b07d1c49c40036c4207fc6f0c8d989783ff0104eb381eeae37800"
+}

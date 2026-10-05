@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.user_id AS \"user_id!\"\n           FROM workspace_members m\n           JOIN boards b ON b.workspace_id = m.workspace_id\n           WHERE b.id = $1 AND m.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3c4096daf3f11df97ec89379ef2154ec9eeb60b5a4f59d53d0720bffa2959ad9"
+}

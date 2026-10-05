@@ -1,7 +1,12 @@
 //! Business logic for workspace-scoped resources. Inputs are validated by handlers.
 
 pub mod access;
+pub mod activity;
 pub mod boards;
+pub mod cards;
+pub mod labels;
+pub mod lists;
+pub mod positions;
 pub mod workspaces;
 
 fn now_ms() -> i64 {

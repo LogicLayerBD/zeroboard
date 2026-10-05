@@ -79,3 +79,8 @@ This runs `VACUUM INTO 'backup.db'` — a safe online backup of SQLite.
 - Never store JWT secrets in the database
 - Never use `SELECT *` — always name columns explicitly
 - Never ignore sqlx errors — always propagate with `?`
+
+## Running cargo sqlx prepare
+Always run from backend/ with:
+SQLX_OFFLINE=false DATABASE_URL=sqlite://data/zeroboard.db cargo sqlx prepare -- --all-targets
+The server must have run at least once so the database file exists.

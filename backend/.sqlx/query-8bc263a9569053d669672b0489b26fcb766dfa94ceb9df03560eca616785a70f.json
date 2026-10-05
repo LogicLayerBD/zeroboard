@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT action, payload AS \"payload!\" FROM activity_log\n               WHERE card_id = $1 ORDER BY created_at, rowid",
+  "describe": {
+    "columns": [
+      {
+        "name": "action",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "payload!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "8bc263a9569053d669672b0489b26fcb766dfa94ceb9df03560eca616785a70f"
+}

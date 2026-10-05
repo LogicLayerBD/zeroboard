@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE cards SET list_id = $1, position = $2, updated_at = $3\n           WHERE id = $4\n           RETURNING id AS \"id!\", list_id AS \"list_id!\", board_id AS \"board_id!\",\n                     title AS \"title!\", description, position AS \"position!\", due_date,\n                     created_by AS \"created_by!\", created_at AS \"created_at!\",\n                     updated_at AS \"updated_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "list_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "board_id!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "title!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "position!",
+        "ordinal": 5,
+        "type_info": "Float"
+      },
+      {
+        "name": "due_date",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_by!",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 8,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 9,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "58a68fa29ae6ab55946f8239e7a32cbc2897205f27bc7e2c64471c1f4115c687"
+}

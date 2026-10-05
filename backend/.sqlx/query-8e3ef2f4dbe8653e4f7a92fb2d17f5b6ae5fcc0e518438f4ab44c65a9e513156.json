@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT l.id AS \"id!\", l.board_id, l.name, l.color\n           FROM card_labels cl\n           JOIN labels l ON l.id = cl.label_id\n           WHERE cl.card_id = $1\n           ORDER BY l.name, l.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "board_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "color",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8e3ef2f4dbe8653e4f7a92fb2d17f5b6ae5fcc0e518438f4ab44c65a9e513156"
+}
