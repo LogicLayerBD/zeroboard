@@ -24,5 +24,5 @@ pub use list::List;
 pub use notification::Notification;
 pub use refresh_token::RefreshToken;
 pub use time_entry::TimeEntry;
-pub use user::User;
+pub use user::{User, UserRole};
 pub use workspace::{Workspace, WorkspaceMember, WorkspaceRole};

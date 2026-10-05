@@ -1,6 +1,15 @@
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+/// Instance-wide role; mirrors `CHECK(role IN ('admin','member'))` on `users.role`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(rename_all = "lowercase")]
+pub enum UserRole {
+    Admin,
+    Member,
+}
 
 #[derive(Clone, Serialize, sqlx::FromRow)]
 pub struct User {
@@ -11,6 +20,7 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password: String,
     pub avatar_color: String,
+    pub role: UserRole,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -23,6 +33,7 @@ impl fmt::Debug for User {
             .field("name", &self.name)
             .field("password", &"<redacted>")
             .field("avatar_color", &self.avatar_color)
+            .field("role", &self.role)
             .field("created_at", &self.created_at)
             .field("updated_at", &self.updated_at)
             .finish()
@@ -42,6 +53,7 @@ mod tests {
             name: "A".into(),
             password: HASH.into(),
             avatar_color: "#6366f1".into(),
+            role: UserRole::Member,
             created_at: 0,
             updated_at: 0,
         }

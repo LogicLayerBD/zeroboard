@@ -1,9 +1,12 @@
+mod auth;
 mod config;
 mod db;
 mod errors;
+mod handlers;
 mod models;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::Context;
 use axum::extract::State;
@@ -15,6 +18,9 @@ use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetReques
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
+use crate::auth::rate_limit::{
+    self, RateLimiter, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW, REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW,
+};
 use crate::config::Config;
 use crate::errors::AppError;
 
@@ -28,6 +34,20 @@ pub struct AppState {
     /// Read-only pool: SELECT-only queries.
     pub read_db: SqlitePool,
     pub config: Config,
+    pub login_limiter: Arc<RateLimiter>,
+    pub register_limiter: Arc<RateLimiter>,
+}
+
+impl AppState {
+    pub fn new(db: SqlitePool, read_db: SqlitePool, config: Config) -> Self {
+        Self {
+            db,
+            read_db,
+            config,
+            login_limiter: Arc::new(RateLimiter::new(LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW)),
+            register_limiter: Arc::new(RateLimiter::new(REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW)),
+        }
+    }
 }
 
 #[tokio::main]
@@ -56,19 +76,22 @@ async fn main() -> anyhow::Result<()> {
     db::run_migrations(&write_pool).await?;
     let read_pool = db::create_read_pool(&config.database_url).await?;
     let addr = SocketAddr::new(config.host, config.port);
-    let state = AppState {
-        db: write_pool,
-        read_db: read_pool,
-        config,
-    };
+    let state = AppState::new(write_pool, read_pool, config);
+    rate_limit::spawn_pruner(vec![
+        state.login_limiter.clone(),
+        state.register_limiter.clone(),
+    ]);
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("failed to bind {addr}"))?;
     tracing::info!(%addr, "zeroboard listening");
 
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown_signal())
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
         .await
         .context("server error")?;
 
@@ -81,6 +104,7 @@ fn router(state: AppState) -> Router {
     Router::new()
         .route("/live", get(live))
         .route("/ready", get(ready))
+        .merge(handlers::auth::router(&state))
         .fallback(|| async { AppError::NotFound })
         .with_state(state)
         .layer(
@@ -187,11 +211,7 @@ mod tests {
             app_name: "ZeroBoard".into(),
             first_user_is_admin: true,
         };
-        AppState {
-            db,
-            read_db,
-            config,
-        }
+        AppState::new(db, read_db, config)
     }
 
     async fn get_status(state: AppState, uri: &str) -> (StatusCode, Option<String>) {

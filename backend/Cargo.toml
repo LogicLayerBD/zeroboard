@@ -22,6 +22,8 @@ tower-http = { version = "0.5", features = ["cors", "trace", "request-id", "util
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
+rand = "0.8"
+dashmap = "5"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

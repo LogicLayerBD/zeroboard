@@ -141,6 +141,10 @@ CREATE TABLE users (
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
+
+-- 0002_add_user_role.sql: instance-wide role (first registered user is admin
+-- when FIRST_USER_IS_ADMIN=true). Workspace permissions stay in workspace_members.role.
+ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin','member'));
 ```
 
 
@@ -383,6 +387,10 @@ POST   /api/auth/logout
 POST   /api/auth/refresh
 GET    /api/auth/me
 ```
+
+- Refresh cookie: `refresh_token=<refresh_tokens.id>.<64-hex secret>`; `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`.
+  Only a bcrypt hash of the secret is stored; the id locates the row. Tokens rotate on every refresh.
+- Login: max 10 attempts per IP per 15 min. Register: max 5 per IP per hour (429 when exceeded).
 
 
 
@@ -682,5 +690,8 @@ The app is considered v1-complete when:
 - Boards archived via workspace deletion are unreachable through 
   the API. Recovery requires direct database access. 
   A future admin panel endpoint will list all archived boards.
+- Rate limiting uses the socket address only. Behind a reverse proxy 
+  (Nginx), all clients share one limit. Trusted proxy support is a 
+  post-v1 addition.
 
   

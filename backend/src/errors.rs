@@ -1,9 +1,11 @@
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
 
 const INTERNAL_ERROR_MESSAGE: &str = "internal server error";
+const INVALID_BODY_MESSAGE: &str = "invalid request body";
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -15,8 +17,17 @@ pub enum AppError {
     Forbidden,
     #[error("{0}")]
     BadRequest(String),
+    #[error("too many requests")]
+    TooManyRequests,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+}
+
+/// Serde details may echo raw input, so clients only get a generic message.
+impl From<JsonRejection> for AppError {
+    fn from(_: JsonRejection) -> Self {
+        AppError::BadRequest(INVALID_BODY_MESSAGE.to_string())
+    }
 }
 
 impl From<sqlx::Error> for AppError {
@@ -35,6 +46,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::BadRequest(reason) => (StatusCode::BAD_REQUEST, reason.clone()),
+            AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "internal error");
                 (
@@ -81,6 +93,10 @@ mod tests {
         assert_eq!(
             render(AppError::BadRequest("title is required".into())).await,
             (StatusCode::BAD_REQUEST, json!({ "error": "title is required" }))
+        );
+        assert_eq!(
+            render(AppError::TooManyRequests).await,
+            (StatusCode::TOO_MANY_REQUESTS, json!({ "error": "too many requests" }))
         );
     }
 
