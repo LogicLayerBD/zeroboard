@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as api from '$lib/api';
 	import { formatDateTime, formatMinutes } from '$lib/format';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { currentUser } from '$lib/stores/auth.store';
 	import { toastError } from '$lib/stores/toast.store';
 	import { members, myRole } from '$lib/stores/workspace.store';
@@ -54,15 +55,20 @@
 </script>
 
 <section>
-	<div class="mb-2 flex items-center justify-between">
-		<h3 class="text-sm font-semibold text-slate-700">Time tracking</h3>
-		<span class="text-xs font-medium text-slate-500">Total: {formatMinutes(total)}</span>
+	<div class="mb-3 flex items-center justify-between">
+		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+			<Icon name="clock" class="h-4 w-4 text-slate-400" />Time tracking
+		</h3>
+		<span
+			class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200"
+			>Total {formatMinutes(total)}</span
+		>
 	</div>
 	{#if canEdit}
-		<form class="mb-2 flex gap-2" onsubmit={log}>
+		<form class="mb-3 flex gap-2" onsubmit={log}>
 			<input
 				type="number"
-				class="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+				class="input w-24 px-2.5 py-1.5"
 				placeholder="Minutes"
 				min={MIN_MINUTES}
 				max={MAX_MINUTES}
@@ -70,22 +76,22 @@
 				bind:value={minutes}
 			/>
 			<input
-				class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+				class="input min-w-0 flex-1 px-2.5 py-1.5"
 				placeholder="What did you work on? (optional)"
 				maxlength={MAX_DESCRIPTION_CHARS}
 				bind:value={description}
 			/>
 			<button
 				type="submit"
-				class="rounded-md bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-900 disabled:opacity-50"
+				class="btn-secondary btn-sm"
 				disabled={saving}>Log</button
 			>
 		</form>
 	{/if}
-	<ul class="space-y-1">
+	<ul class="divide-y divide-slate-100">
 		{#each entries as entry (entry.id)}
-			<li class="flex items-center gap-2 text-sm">
-				<span class="w-14 font-medium">{formatMinutes(entry.minutes)}</span>
+			<li class="group flex items-center gap-3 py-2 text-sm">
+				<span class="w-14 font-semibold tabular-nums text-slate-900">{formatMinutes(entry.minutes)}</span>
 				<span class="flex-1 truncate text-slate-600">{entry.description ?? ''}</span>
 				<span class="text-xs text-slate-400"
 					>{memberName.get(entry.user_id) ?? 'Former member'} · {formatDateTime(entry.logged_at)}</span
@@ -93,9 +99,9 @@
 				{#if canEdit && (entry.user_id === $currentUser?.id || $myRole === 'admin')}
 					<button
 						type="button"
-						class="text-xs text-slate-400 hover:text-red-600"
+						class="icon-btn p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
 						aria-label="Delete time entry"
-						onclick={() => remove(entry)}>✕</button
+						onclick={() => remove(entry)}><Icon name="x" class="h-3.5 w-3.5" /></button
 					>
 				{/if}
 			</li>

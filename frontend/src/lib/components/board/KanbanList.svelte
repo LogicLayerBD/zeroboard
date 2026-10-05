@@ -2,6 +2,7 @@
 	import { flip } from 'svelte/animate';
 	import { dndzone, dragHandle, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import * as api from '$lib/api';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { FLIP_DURATION_MS, isShadowItem } from '$lib/dnd';
 	import {
 		applyCardCreated,
@@ -18,13 +19,15 @@
 
 	interface Props {
 		list: ListWithCards;
+		/** Column colour (hex), assigned by position on the board. */
+		accent: string;
 		canEdit: boolean;
 		onopencard: (cardId: string) => void;
 		ondragstart: (cardId: string, listId: string) => void;
 		ondrop: (cardId: string, listId: string, cards: BoardCard[]) => void;
 	}
 
-	let { list, canEdit, onopencard, ondragstart, ondrop }: Props = $props();
+	let { list, accent, canEdit, onopencard, ondragstart, ondrop }: Props = $props();
 
 	let renaming = $state(false);
 	let nameDraft = $state('');
@@ -109,18 +112,23 @@
 	}
 </script>
 
-<section class="flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-slate-100" aria-label={list.name}>
-	<header class="flex items-center gap-1 px-3 pb-1 pt-2">
+<section
+	class="group/column flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl bg-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-sm"
+	aria-label={list.name}
+>
+	<span class="h-1 shrink-0" style:background-color={accent}></span>
+	<header class="flex items-center gap-1.5 px-3 pb-2 pt-2.5">
 		{#if canEdit}
 			<span
 				use:dragHandle
-				class="cursor-grab px-1 text-slate-400 hover:text-slate-600"
-				aria-label="Drag column {list.name}">⋮⋮</span
+				class="-ml-1 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-300/50 hover:text-slate-600"
+				aria-label="Drag column {list.name}"><Icon name="grip" class="h-4 w-4" strokeWidth={3} /></span
 			>
 		{/if}
+		<span class="h-2.5 w-2.5 shrink-0 rounded-full" style:background-color={accent}></span>
 		{#if renaming}
 			<input
-				class="flex-1 rounded border border-indigo-400 px-1.5 py-0.5 text-sm font-semibold focus:outline-none"
+				class="input min-w-0 flex-1 px-2 py-1 text-sm font-semibold"
 				maxlength={MAX_NAME_CHARS}
 				bind:value={nameDraft}
 				onblur={saveRename}
@@ -130,25 +138,30 @@
 		{:else}
 			<button
 				type="button"
-				class="flex-1 truncate text-left text-sm font-semibold text-slate-700"
+				class="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 {canEdit
+					? 'cursor-text'
+					: 'cursor-default'}"
 				disabled={!canEdit}
 				title={canEdit ? 'Rename column' : list.name}
 				onclick={startRename}>{list.name}</button
 			>
 		{/if}
-		<span class="text-xs text-slate-400">{list.cards.length}</span>
+		<span
+			class="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500 ring-1 ring-inset ring-slate-900/5"
+			>{list.cards.length}</span
+		>
 		{#if canEdit}
 			<button
 				type="button"
-				class="rounded px-1 text-slate-400 hover:bg-slate-200 hover:text-red-600"
+				class="icon-btn p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/column:opacity-100"
 				aria-label="Delete column {list.name}"
-				onclick={removeList}>✕</button
+				onclick={removeList}><Icon name="trash" class="h-3.5 w-3.5" /></button
 			>
 		{/if}
 	</header>
 
 	<div
-		class="flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto px-2 py-1"
+		class="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-1 pt-0.5"
 		use:dndzone={{
 			items: list.cards,
 			type: 'card',
@@ -172,7 +185,7 @@
 			{#if adding}
 				<form onsubmit={addCard}>
 					<input
-						class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+						class="input w-full"
 						placeholder="Card title, then Enter"
 						maxlength={MAX_TITLE_CHARS}
 						bind:value={titleDraft}
@@ -186,8 +199,8 @@
 			{:else}
 				<button
 					type="button"
-					class="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-500 hover:bg-slate-200"
-					onclick={() => (adding = true)}>+ Add card</button
+					class="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+					onclick={() => (adding = true)}><Icon name="plus" />Add card</button
 				>
 			{/if}
 		</div>

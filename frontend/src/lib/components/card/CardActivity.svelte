@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as api from '$lib/api';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { formatDateTime } from '$lib/format';
 	import { currentUser } from '$lib/stores/auth.store';
 	import { toastError } from '$lib/stores/toast.store';
@@ -71,8 +72,10 @@
 </script>
 
 <section>
-	<h3 class="mb-2 text-sm font-semibold text-slate-700">Comments</h3>
-	<ul class="space-y-3">
+	<h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+		<Icon name="message" class="h-4 w-4 text-slate-400" />Comments
+	</h3>
+	<ul class="space-y-4">
 		{#each comments as comment (comment.id)}
 			{@const author = memberById.get(comment.user_id)}
 			<li class="flex gap-3">
@@ -91,37 +94,41 @@
 					</div>
 					{#if editingId === comment.id}
 						<textarea
-							class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm focus:border-indigo-500 focus:outline-none"
+							class="input mt-1 w-full"
 							rows="3"
 							maxlength={MAX_BODY_CHARS}
 							bind:value={editDraft}
 						></textarea>
-						<div class="mt-1 flex gap-2 text-xs">
+						<div class="mt-2 flex gap-2">
 							<button
 								type="button"
-								class="text-indigo-600 hover:underline"
+								class="btn-primary btn-sm"
 								onclick={() => saveEdit(comment)}>Save</button
 							>
 							<button
 								type="button"
-								class="text-slate-500 hover:underline"
+								class="btn-ghost btn-sm"
 								onclick={() => (editingId = null)}>Cancel</button
 							>
 						</div>
 					{:else}
-						<p class="mt-0.5 whitespace-pre-wrap break-words text-sm text-slate-700">{comment.body}</p>
-						<div class="mt-1 flex gap-3 text-xs">
+						<p
+							class="mt-1 whitespace-pre-wrap break-words rounded-xl rounded-tl-sm bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 ring-1 ring-inset ring-slate-100"
+						>
+							{comment.body}
+						</p>
+						<div class="mt-1 flex gap-3 px-1 text-xs font-medium">
 							{#if canEdit && comment.user_id === $currentUser?.id}
 								<button
 									type="button"
-									class="text-slate-500 hover:underline"
+									class="text-slate-400 transition hover:text-slate-700"
 									onclick={() => startEdit(comment)}>Edit</button
 								>
 							{/if}
 							{#if canEdit && (comment.user_id === $currentUser?.id || $myRole === 'admin')}
 								<button
 									type="button"
-									class="text-slate-500 hover:text-red-600 hover:underline"
+									class="text-slate-400 transition hover:text-red-600"
 									onclick={() => remove(comment)}>Delete</button
 								>
 							{/if}
@@ -134,19 +141,24 @@
 		{/each}
 	</ul>
 	{#if canEdit}
-		<form class="mt-3" onsubmit={post}>
-			<textarea
-				class="w-full rounded-md border border-slate-300 p-2 text-sm focus:border-indigo-500 focus:outline-none"
-				rows="2"
-				placeholder="Write a comment…"
-				maxlength={MAX_BODY_CHARS}
-				bind:value={body}
-			></textarea>
-			<button
-				type="submit"
-				class="mt-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-				disabled={saving || !body.trim()}>Comment</button
-			>
+		<form class="mt-4 flex gap-3" onsubmit={post}>
+			{#if $currentUser}
+				<Avatar name={$currentUser.name} color={$currentUser.avatar_color} size="sm" />
+			{/if}
+			<div class="flex-1">
+				<textarea
+					class="input w-full"
+					rows="2"
+					placeholder="Write a comment…"
+					maxlength={MAX_BODY_CHARS}
+					bind:value={body}
+				></textarea>
+				<button
+					type="submit"
+					class="btn-primary btn-sm mt-2"
+					disabled={saving || !body.trim()}>Comment</button
+				>
+			</div>
 		</form>
 	{/if}
 </section>

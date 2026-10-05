@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { renderMarkdown } from '$lib/markdown';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	const MAX_DESCRIPTION_CHARS = 50_000;
 
@@ -37,17 +38,19 @@
 </script>
 
 <section>
-	<div class="mb-2 flex items-center justify-between">
-		<h3 class="text-sm font-semibold text-slate-700">Description</h3>
+	<div class="mb-3 flex items-center justify-between">
+		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+			<Icon name="text" class="h-4 w-4 text-slate-400" />Description
+		</h3>
 		{#if canEdit && !editing}
-			<button type="button" class="text-xs text-indigo-600 hover:underline" onclick={startEdit}
-				>Edit</button
+			<button type="button" class="btn-ghost btn-sm" onclick={startEdit}
+				><Icon name="pencil" class="h-3.5 w-3.5" />Edit</button
 			>
 		{/if}
 	</div>
 	{#if editing}
 		<textarea
-			class="h-48 w-full rounded-md border border-slate-300 p-2 font-mono text-sm focus:border-indigo-500 focus:outline-none"
+			class="input h-48 w-full font-mono"
 			placeholder="Supports **bold**, *italic*, `code`, lists, # headings and [links](https://…)"
 			maxlength={MAX_DESCRIPTION_CHARS}
 			bind:value={draft}
@@ -55,19 +58,29 @@
 		<div class="mt-2 flex gap-2">
 			<button
 				type="button"
-				class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+				class="btn-primary btn-sm"
 				disabled={saving}
 				onclick={save}>Save</button
 			>
 			<button
 				type="button"
-				class="rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+				class="btn-ghost btn-sm"
 				onclick={() => (editing = false)}>Cancel</button
 			>
 		</div>
 	{:else if html}
-		<div class="break-words text-sm text-slate-700">{@html html}</div>
+		<div class="break-words rounded-xl bg-slate-50/70 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-inset ring-slate-100">
+			{@html html}
+		</div>
 	{:else}
-		<p class="text-sm text-slate-400">No description.</p>
+		{#if canEdit}
+			<button
+				type="button"
+				class="w-full rounded-xl border-2 border-dashed border-slate-200 p-4 text-left text-sm text-slate-400 transition hover:border-indigo-300 hover:text-indigo-600"
+				onclick={startEdit}>Add a more detailed description…</button
+			>
+		{:else}
+			<p class="text-sm text-slate-400">No description.</p>
+		{/if}
 	{/if}
 </section>

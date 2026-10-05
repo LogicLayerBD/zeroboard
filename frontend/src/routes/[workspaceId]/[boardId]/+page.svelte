@@ -6,7 +6,9 @@
 	import KanbanBoard from '$lib/components/board/KanbanBoard.svelte';
 	import ListView from '$lib/components/board/ListView.svelte';
 	import CardModal from '$lib/components/card/CardModal.svelte';
+	import { accentFor } from '$lib/colors';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import Icon, { type IconName } from '$lib/components/ui/Icon.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { board, boardLoading, closeBoard, loadBoard } from '$lib/stores/board.store';
 	import { toastError } from '$lib/stores/toast.store';
@@ -24,6 +26,11 @@
 	const CARD_QUERY_PARAM = 'card';
 
 	type View = 'kanban' | 'table';
+
+	const VIEWS: { value: View; label: string; icon: IconName }[] = [
+		{ value: 'kanban', label: 'Board', icon: 'kanban' },
+		{ value: 'table', label: 'Table', icon: 'table' }
+	];
 
 	let view = $state<View>('kanban');
 	let renaming = $state(false);
@@ -106,55 +113,70 @@
 {#if $boardLoading || !$board}
 	<Spinner />
 {:else}
-	<header class="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+	<header class="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-6 py-3">
+		<span
+			class="h-7 w-7 shrink-0 rounded-lg shadow-inner"
+			style:background-color={accentFor($board.id)}
+		></span>
 		{#if renaming}
 			<form onsubmit={saveRename}>
 				<input
-					class="rounded-md border border-indigo-400 px-2 py-0.5 text-lg font-semibold focus:outline-none"
+					class="input py-1 text-lg font-bold"
 					maxlength={MAX_NAME_CHARS}
 					bind:value={nameDraft}
 					onblur={() => (renaming = false)}
 				/>
 			</form>
 		{:else}
-			<h1 class="text-lg font-semibold">{$board.name}</h1>
+			<h1 class="text-xl font-bold tracking-tight text-slate-900">{$board.name}</h1>
 			{#if isAdmin}
-				<button type="button" class="text-xs text-indigo-600 hover:underline" onclick={startRename}
-					>Rename</button
+				<button type="button" class="icon-btn" aria-label="Rename board" onclick={startRename}
+					><Icon name="pencil" /></button
 				>
 			{/if}
 		{/if}
 
-		<div class="flex -space-x-1" aria-label="Members viewing this board">
-			{#each viewers as member (member.user_id)}
-				<Avatar name={member.name} color={member.avatar_color} size="sm" online />
-			{/each}
-		</div>
+		{#if viewers.length > 0}
+			<div
+				class="ml-2 flex items-center gap-2 rounded-full bg-emerald-50 py-1 pl-1 pr-3 ring-1 ring-inset ring-emerald-200"
+				aria-label="Members viewing this board"
+			>
+				<div class="flex -space-x-1.5">
+					{#each viewers as member (member.user_id)}
+						<Avatar name={member.name} color={member.avatar_color} size="sm" online />
+					{/each}
+				</div>
+				<span class="text-xs font-medium text-emerald-700">{viewers.length} here now</span>
+			</div>
+		{/if}
 
 		<div class="ml-auto flex items-center gap-2">
-			<div class="flex rounded-md border border-slate-300 p-0.5 text-sm" role="group" aria-label="View">
-				{#each [['kanban', 'Board'], ['table', 'Table']] as [value, label] (value)}
+			<div class="flex rounded-lg bg-slate-100 p-1 text-sm" role="group" aria-label="View">
+				{#each VIEWS as option (option.value)}
 					<button
 						type="button"
-						class="rounded px-3 py-1 {view === value
-							? 'bg-indigo-600 text-white'
-							: 'text-slate-600 hover:bg-slate-100'}"
-						aria-pressed={view === value}
-						onclick={() => (view = value as View)}>{label}</button
+						class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition {view ===
+						option.value
+							? 'bg-white text-slate-900 shadow-sm'
+							: 'text-slate-500 hover:text-slate-800'}"
+						aria-pressed={view === option.value}
+						onclick={() => (view = option.value)}><Icon name={option.icon} />{option.label}</button
 					>
 				{/each}
 			</div>
 			{#if isAdmin}
 				<button
 					type="button"
-					class="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-red-600"
-					onclick={archive}>Archive</button
+					class="icon-btn hover:bg-red-50 hover:text-red-600"
+					aria-label="Archive board"
+					title="Archive board"
+					onclick={archive}><Icon name="archive" /></button
 				>
 			{/if}
 		</div>
 	</header>
 
-	<div class="min-h-0 flex-1">
+	<div class="min-h-0 flex-1 bg-gradient-to-br from-slate-100 via-indigo-50/60 to-violet-50/60">
 		{#if view === 'kanban'}
 			<KanbanBoard lists={$board.lists} {canEdit} onopencard={openCard} />
 		{:else}

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import * as api from '$lib/api';
+	import { accentFor } from '$lib/colors';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { formatDate } from '$lib/format';
 	import { currentUser } from '$lib/stores/auth.store';
@@ -23,6 +25,11 @@
 	const MAX_EMAIL_LEN = 254;
 	const ROLES: WorkspaceRole[] = ['admin', 'member', 'viewer'];
 	const DEFAULT_INVITE_ROLE: WorkspaceRole = 'member';
+	const ROLE_BADGE: Record<WorkspaceRole, string> = {
+		admin: 'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200',
+		member: 'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200',
+		viewer: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200'
+	};
 
 	let inviteEmail = $state('');
 	let inviteRole = $state<WorkspaceRole>(DEFAULT_INVITE_ROLE);
@@ -111,130 +118,165 @@
 
 <svelte:head><title>{$currentWorkspace?.name ?? 'Workspace'} · ZeroBoard</title></svelte:head>
 
-<div class="overflow-y-auto p-8">
+<div class="overflow-y-auto">
 	{#if $workspaceLoading}
 		<Spinner />
 	{:else}
-		<div class="flex items-center gap-3">
-			{#if renaming}
-				<form onsubmit={saveRename}>
-					<input
-						class="rounded-md border border-indigo-400 px-2 py-1 text-2xl font-semibold focus:outline-none"
-						maxlength={MAX_NAME_CHARS}
-						bind:value={nameDraft}
-						onblur={() => (renaming = false)}
-					/>
-				</form>
-			{:else}
-				<h1 class="text-2xl font-semibold">{$currentWorkspace?.name ?? ''}</h1>
-				{#if isAdmin}
-					<button type="button" class="text-sm text-indigo-600 hover:underline" onclick={startRename}
-						>Rename</button
-					>
-				{/if}
-			{/if}
+		<div class="border-b border-slate-200 bg-white">
+			<div class="mx-auto flex max-w-5xl items-center gap-4 px-8 py-8">
+				<span
+					class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-2xl font-bold text-white shadow-lg"
+					style:background-color={accentFor($currentWorkspace?.id ?? '')}
+				>
+					{($currentWorkspace?.name ?? '').charAt(0).toUpperCase()}
+				</span>
+				<div class="min-w-0 flex-1">
+					{#if renaming}
+						<form onsubmit={saveRename}>
+							<input
+								class="input text-2xl font-bold"
+								maxlength={MAX_NAME_CHARS}
+								bind:value={nameDraft}
+								onblur={() => (renaming = false)}
+							/>
+						</form>
+					{:else}
+						<div class="flex items-center gap-2">
+							<h1 class="truncate text-3xl font-bold tracking-tight text-slate-900">
+								{$currentWorkspace?.name ?? ''}
+							</h1>
+							{#if isAdmin}
+								<button type="button" class="icon-btn" aria-label="Rename workspace" onclick={startRename}
+									><Icon name="pencil" /></button
+								>
+							{/if}
+						</div>
+					{/if}
+					<p class="mt-1 flex items-center gap-3 text-sm text-slate-500">
+						<span class="inline-flex items-center gap-1"
+							><Icon name="kanban" class="h-3.5 w-3.5" />{$boards.length} boards</span
+						>
+						<span class="inline-flex items-center gap-1"
+							><Icon name="users" class="h-3.5 w-3.5" />{$members.length} members</span
+						>
+					</p>
+				</div>
+			</div>
 		</div>
 
-		<section class="mt-8">
-			<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Boards</h2>
-			<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-				{#each $boards as board (board.id)}
-					<li>
-						<a
-							href="/{encodeURIComponent($currentWorkspace?.id ?? '')}/{encodeURIComponent(board.id)}"
-							class="block h-24 rounded-lg bg-indigo-600 p-4 font-semibold text-white shadow-sm hover:bg-indigo-700"
-						>
-							{board.name}
-						</a>
-					</li>
-				{:else}
-					<li class="text-sm text-slate-500">No boards yet. Create one from the sidebar.</li>
-				{/each}
-			</ul>
-		</section>
-
-		<section class="mt-10 max-w-3xl">
-			<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Members</h2>
-			<ul class="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-				{#each $members as member (member.user_id)}
-					<li class="flex items-center gap-3 px-4 py-3">
-						<Avatar name={member.name} color={member.avatar_color} />
-						<div class="min-w-0 flex-1">
-							<p class="truncate text-sm font-medium">
-								{member.name}
-								{#if member.user_id === $currentUser?.id}<span class="text-slate-400">(you)</span>{/if}
-							</p>
-							<p class="truncate text-xs text-slate-500">
-								{member.email} · joined {formatDate(member.joined_at)}
-							</p>
-						</div>
-						{#if isAdmin}
-							<select
-								class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-								aria-label="Role for {member.name}"
-								value={member.role}
-								onchange={(e) => changeRole(member, e.currentTarget)}
+		<div class="mx-auto max-w-5xl px-8 py-8">
+			<section>
+				<h2 class="section-title mb-3">Boards</h2>
+				<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					{#each $boards as board (board.id)}
+						{@const accent = accentFor(board.id)}
+						<li>
+							<a
+								href="/{encodeURIComponent($currentWorkspace?.id ?? '')}/{encodeURIComponent(board.id)}"
+								class="panel group relative block h-28 overflow-hidden p-5 transition hover:-translate-y-0.5 hover:shadow-lift"
 							>
+								<span class="absolute inset-x-0 top-0 h-1.5" style:background-color={accent}></span>
+								<span
+									class="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full opacity-10 transition group-hover:scale-125"
+									style:background-color={accent}
+								></span>
+								<span class="relative flex items-start gap-2">
+									<Icon name="kanban" class="mt-0.5 h-4 w-4 text-slate-400" />
+									<span class="font-semibold text-slate-900">{board.name}</span>
+								</span>
+							</a>
+						</li>
+					{:else}
+						<li
+							class="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 sm:col-span-2 lg:col-span-3"
+						>
+							No boards yet. Create one from the sidebar.
+						</li>
+					{/each}
+				</ul>
+			</section>
+
+			<section class="mt-12 max-w-3xl">
+				<h2 class="section-title mb-3">Members</h2>
+				<ul class="panel divide-y divide-slate-100">
+					{#each $members as member (member.user_id)}
+						<li class="flex items-center gap-3 px-5 py-3.5">
+							<Avatar name={member.name} color={member.avatar_color} />
+							<div class="min-w-0 flex-1">
+								<p class="truncate text-sm font-medium text-slate-900">
+									{member.name}
+									{#if member.user_id === $currentUser?.id}<span class="font-normal text-slate-400"
+											>(you)</span
+										>{/if}
+								</p>
+								<p class="truncate text-xs text-slate-500">
+									{member.email} · joined {formatDate(member.joined_at)}
+								</p>
+							</div>
+							{#if isAdmin}
+								<select
+									class="input w-auto py-1.5 capitalize"
+									aria-label="Role for {member.name}"
+									value={member.role}
+									onchange={(e) => changeRole(member, e.currentTarget)}
+								>
+									{#each ROLES as role (role)}
+										<option value={role}>{role}</option>
+									{/each}
+								</select>
+								<button
+									type="button"
+									class="icon-btn hover:bg-red-50 hover:text-red-600"
+									aria-label="Remove {member.name}"
+									title="Remove {member.name}"
+									onclick={() => remove(member.user_id, member.name)}
+									><Icon name="trash" /></button
+								>
+							{:else}
+								<span
+									class="rounded-full px-2.5 py-0.5 text-xs font-medium capitalize {ROLE_BADGE[member.role]}"
+									>{member.role}</span
+								>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+
+				{#if isAdmin}
+					<form class="panel mt-4 p-5" onsubmit={invite}>
+						<p class="text-sm font-semibold text-slate-900">Invite a teammate</p>
+						<p class="mt-0.5 text-xs text-slate-500">
+							Teammates need an account first: they register, then you add them by email.
+						</p>
+						<div class="mt-4 flex flex-wrap gap-2">
+							<input
+								type="email"
+								class="input min-w-0 flex-1"
+								placeholder="teammate@example.com"
+								maxlength={MAX_EMAIL_LEN}
+								required
+								bind:value={inviteEmail}
+							/>
+							<select class="input w-auto capitalize" aria-label="Role" bind:value={inviteRole}>
 								{#each ROLES as role (role)}
 									<option value={role}>{role}</option>
 								{/each}
 							</select>
-							<button
-								type="button"
-								class="text-sm text-slate-400 hover:text-red-600"
-								aria-label="Remove {member.name}"
-								onclick={() => remove(member.user_id, member.name)}>Remove</button
-							>
-						{:else}
-							<span class="rounded bg-slate-100 px-2 py-0.5 text-xs capitalize text-slate-600"
-								>{member.role}</span
-							>
-						{/if}
-					</li>
-				{/each}
-			</ul>
+							<button type="submit" class="btn-primary" disabled={inviting}>Invite</button>
+						</div>
+					</form>
 
-			{#if isAdmin}
-				<form class="mt-4 flex flex-wrap gap-2" onsubmit={invite}>
-					<input
-						type="email"
-						class="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-						placeholder="teammate@example.com"
-						maxlength={MAX_EMAIL_LEN}
-						required
-						bind:value={inviteEmail}
-					/>
-					<select
-						class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm"
-						aria-label="Role"
-						bind:value={inviteRole}
-					>
-						{#each ROLES as role (role)}
-							<option value={role}>{role}</option>
-						{/each}
-					</select>
-					<button
-						type="submit"
-						class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-						disabled={inviting}>Invite</button
-					>
-				</form>
-				<p class="mt-2 text-xs text-slate-500">
-					Teammates need an account first: they register, then you add them by email.
-				</p>
-
-				<div class="mt-10 rounded-lg border border-red-200 p-4">
-					<h3 class="text-sm font-semibold text-red-700">Danger zone</h3>
-					<p class="mt-1 text-sm text-slate-600">
-						Deleting the workspace archives its boards and removes all members.
-					</p>
-					<button
-						type="button"
-						class="mt-3 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-						onclick={deleteWorkspace}>Delete workspace</button
-					>
-				</div>
-			{/if}
-		</section>
+					<div class="mt-12 rounded-2xl border border-red-200 bg-red-50/50 p-5">
+						<h3 class="text-sm font-semibold text-red-700">Danger zone</h3>
+						<p class="mt-1 text-sm text-slate-600">
+							Deleting the workspace archives its boards and removes all members.
+						</p>
+						<button type="button" class="btn-danger mt-4" onclick={deleteWorkspace}
+							><Icon name="trash" />Delete workspace</button
+						>
+					</div>
+				{/if}
+			</section>
+		</div>
 	{/if}
 </div>

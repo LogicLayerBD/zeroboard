@@ -3,6 +3,7 @@
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import DatePicker from '$lib/components/ui/DatePicker.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { formatDate } from '$lib/format';
 	import {
 		applyCardUpdated,
@@ -13,6 +14,7 @@
 	import { toastError } from '$lib/stores/toast.store';
 	import { members } from '$lib/stores/workspace.store';
 	import type { BoardCard, CardChanges, ListWithCards } from '$lib/types';
+	import StatusSelect from './StatusSelect.svelte';
 
 	const MAX_TITLE_CHARS = 500;
 
@@ -26,7 +28,6 @@
 
 	interface Row {
 		card: BoardCard;
-		listName: string;
 		/** Index in board order (list order, then card position). */
 		order: number;
 	}
@@ -66,7 +67,7 @@
 
 	const rows = $derived.by(() => {
 		const all: Row[] = lists.flatMap((list) =>
-			list.cards.map((card) => ({ card, listName: list.name, order: 0 }))
+			list.cards.map((card) => ({ card, order: 0 }))
 		);
 		all.forEach((row, index) => (row.order = index));
 		const direction = ascending ? 1 : -1;
@@ -139,10 +140,12 @@
 </script>
 
 {#snippet header(key: SortKey, label: string)}
-	<th class="px-3 py-2 text-left">
+	<th class="border-b border-slate-200 bg-slate-50/95 px-4 py-3 text-left backdrop-blur first:rounded-tl-2xl last:rounded-tr-2xl">
 		<button
 			type="button"
-			class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-800"
+			class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider {sortKey === key
+				? 'text-indigo-600'
+				: 'text-slate-500 hover:text-slate-800'}"
 			onclick={() => sortBy(key)}
 		>
 			{label}
@@ -151,9 +154,9 @@
 	</th>
 {/snippet}
 
-<div class="h-full overflow-auto p-4">
-	<table class="w-full min-w-max border-separate border-spacing-0 rounded-lg bg-white text-sm shadow-sm">
-		<thead class="sticky top-0 bg-slate-50">
+<div class="h-full overflow-auto p-6">
+	<table class="panel w-full min-w-max border-separate border-spacing-0 text-sm">
+		<thead class="sticky top-0 z-10">
 			<tr>
 				{@render header('title', 'Title')}
 				{@render header('board', 'Status')}
@@ -164,15 +167,15 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each rows as { card, listName } (card.id)}
+			{#each rows as { card } (card.id)}
 				{@const assigned = $members.filter((m) => card.assignee_ids.includes(m.user_id))}
 				{@const unassigned = $members.filter((m) => !card.assignee_ids.includes(m.user_id))}
-				<tr class="border-t border-slate-100 hover:bg-slate-50">
-					<td class="border-t border-slate-100 px-3 py-2">
+				<tr class="group transition hover:bg-indigo-50/40">
+					<td class="border-t border-slate-100 px-4 py-2.5">
 						<div class="flex items-center gap-2">
 							{#if canEdit}
 								<input
-									class="w-full rounded border border-transparent px-1 py-0.5 hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
+									class="input-inline w-full min-w-72 font-medium text-slate-800"
 									value={card.title}
 									maxlength={MAX_TITLE_CHARS}
 									aria-label="Title"
@@ -182,32 +185,26 @@
 									}}
 								/>
 							{:else}
-								<span class="px-1">{card.title}</span>
+								<span class="px-1.5 font-medium text-slate-800">{card.title}</span>
 							{/if}
 							<button
 								type="button"
-								class="shrink-0 text-xs text-indigo-600 hover:underline"
-								onclick={() => onopencard(card.id)}>Open</button
+								class="icon-btn opacity-0 hover:bg-indigo-100 hover:text-indigo-700 focus-visible:opacity-100 group-hover:opacity-100"
+								aria-label="Open {card.title}"
+								title="Open card"
+								onclick={() => onopencard(card.id)}><Icon name="open" /></button
 							>
 						</div>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2 text-slate-600">
-						{#if canEdit}
-							<select
-								class="rounded border border-slate-200 bg-white px-1 py-0.5 text-sm"
-								aria-label="Status"
-								value={card.list_id}
-								onchange={(e) => changeStatus(card, e.currentTarget)}
-							>
-								{#each lists as list (list.id)}
-									<option value={list.id}>{list.name}</option>
-								{/each}
-							</select>
-						{:else}
-							{listName}
-						{/if}
+					<td class="border-t border-slate-100 px-4 py-2.5">
+						<StatusSelect
+							{lists}
+							value={card.list_id}
+							editable={canEdit}
+							onchange={(select) => changeStatus(card, select)}
+						/>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2">
+					<td class="border-t border-slate-100 px-4 py-2.5">
 						<div class="flex items-center gap-1">
 							{#each assigned as member (member.user_id)}
 								{#if canEdit}
@@ -224,7 +221,7 @@
 							{/each}
 							{#if canEdit && unassigned.length > 0}
 								<select
-									class="rounded border border-slate-200 bg-white px-1 py-0.5 text-xs text-slate-500"
+									class="cursor-pointer appearance-none rounded-full border border-dashed border-slate-300 bg-transparent px-2.5 py-0.5 text-xs font-medium text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
 									aria-label="Assign member"
 									value=""
 									onchange={(e) => {
@@ -240,27 +237,27 @@
 							{/if}
 						</div>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2">
+					<td class="border-t border-slate-100 px-4 py-2.5">
 						<div class="flex flex-wrap gap-1">
 							{#each $labels.filter((l) => card.label_ids.includes(l.id)) as label (label.id)}
 								<Badge color={label.color}>{label.name}</Badge>
 							{/each}
 						</div>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2">
+					<td class="border-t border-slate-100 px-4 py-2.5">
 						<DatePicker
 							value={card.due_date}
 							disabled={!canEdit}
 							onchange={(due_date) => update(card, { due_date })}
 						/>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2 text-slate-500">
+					<td class="border-t border-slate-100 px-4 py-2.5 text-slate-500">
 						{formatDate(card.created_at)}
 					</td>
 				</tr>
 			{:else}
 				<tr>
-					<td colspan="6" class="px-3 py-8 text-center text-slate-500">No cards on this board yet.</td>
+					<td colspan="6" class="px-4 py-12 text-center text-slate-500">No cards on this board yet.</td>
 				</tr>
 			{/each}
 		</tbody>

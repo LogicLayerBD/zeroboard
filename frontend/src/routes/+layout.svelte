@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '@fontsource-variable/inter';
 	import '../app.css';
 	import { onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -53,7 +54,7 @@
 </script>
 
 {#if !$authReady}
-	<Spinner />
+	<div class="flex h-screen items-center justify-center"><Spinner /></div>
 {:else if userId && !isPublic}
 	<div class="flex h-screen flex-col">
 		<Navbar />
@@ -64,7 +65,7 @@
 {:else if !userId && isPublic}
 	{@render children()}
 {:else}
-	<Spinner label="Redirecting…" />
+	<div class="flex h-screen items-center justify-center"><Spinner label="Redirecting…" /></div>
 {/if}
 
 <Toast />

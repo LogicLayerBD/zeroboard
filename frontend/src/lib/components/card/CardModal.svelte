@@ -3,6 +3,7 @@
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import DatePicker from '$lib/components/ui/DatePicker.svelte';
+	import Icon, { type IconName } from '$lib/components/ui/Icon.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { formatDateTime } from '$lib/format';
@@ -19,6 +20,7 @@
 	import { toastError } from '$lib/stores/toast.store';
 	import { members } from '$lib/stores/workspace.store';
 	import type { CardChanges, CardDetails, Label } from '$lib/types';
+	import StatusSelect from '$lib/components/board/StatusSelect.svelte';
 	import CardActivity from './CardActivity.svelte';
 	import CardAttachments from './CardAttachments.svelte';
 	import CardDescription from './CardDescription.svelte';
@@ -44,8 +46,6 @@
 	const boardCard = $derived(
 		$board?.lists.flatMap((l) => l.cards).find((c) => c.id === cardId) ?? null
 	);
-	const listName = $derived($board?.lists.find((l) => l.id === boardCard?.list_id)?.name ?? '');
-
 	$effect(() => {
 		const id = cardId;
 		details = null;
@@ -177,15 +177,27 @@
 	}
 </script>
 
+{#snippet sidebarTitle(icon: IconName, title: string)}
+	<h3 class="section-title mb-2 flex items-center gap-1.5"><Icon name={icon} class="h-3.5 w-3.5" />{title}</h3>
+{/snippet}
+
 <Modal {onclose} label="Card details">
 	{#if !details}
-		<Spinner />
+		<div class="p-10"><Spinner /></div>
 	{:else}
-		<div class="flex items-start gap-3 border-b border-slate-100 p-5">
-			<div class="flex-1">
+		<div class="flex items-start gap-3 border-b border-slate-100 px-6 pb-5 pt-6">
+			<div class="min-w-0 flex-1">
+				<div class="mb-2 flex items-center gap-2 px-1.5 text-xs text-slate-500">
+					<StatusSelect
+						lists={$board?.lists ?? []}
+						value={boardCard?.list_id ?? details.list_id}
+						editable={false}
+					/>
+					<span>Created {formatDateTime(details.created_at)}</span>
+				</div>
 				{#if canEdit}
 					<input
-						class="w-full rounded border border-transparent px-1 text-xl font-semibold hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
+						class="input-inline w-full text-2xl font-bold tracking-tight text-slate-900"
 						maxlength={MAX_TITLE_CHARS}
 						aria-label="Card title"
 						bind:value={titleDraft}
@@ -195,22 +207,16 @@
 						}}
 					/>
 				{:else}
-					<h2 class="px-1 text-xl font-semibold">{details.title}</h2>
+					<h2 class="px-1.5 text-2xl font-bold tracking-tight text-slate-900">{details.title}</h2>
 				{/if}
-				<p class="mt-1 px-1 text-xs text-slate-500">
-					created {formatDateTime(details.created_at)}
-				</p>
 			</div>
-			<button
-				type="button"
-				class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-				aria-label="Close"
-				onclick={onclose}>✕</button
+			<button type="button" class="icon-btn" aria-label="Close" onclick={onclose}
+				><Icon name="x" class="h-5 w-5" /></button
 			>
 		</div>
 
-		<div class="grid gap-6 p-5 md:grid-cols-3">
-			<div class="space-y-6 md:col-span-2">
+		<div class="grid md:grid-cols-[1fr_17rem]">
+			<div class="space-y-8 p-6">
 				<CardDescription
 					description={details.description}
 					{canEdit}
@@ -236,36 +242,34 @@
 				/>
 			</div>
 
-			<aside class="space-y-6">
+			<aside class="space-y-6 border-t border-slate-100 bg-slate-50/70 p-6 md:border-l md:border-t-0">
 				<section>
-					<h3 class="mb-2 text-sm font-semibold text-slate-700">Status</h3>
-					{#if canEdit}
-						<select
-							class="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-							aria-label="Status"
-							value={boardCard?.list_id ?? details.list_id}
-							onchange={(e) => changeStatus(e.currentTarget)}
-						>
-							{#each $board?.lists ?? [] as list (list.id)}
-								<option value={list.id}>{list.name}</option>
-							{/each}
-						</select>
-					{:else}
-						<p class="text-sm">{listName}</p>
-					{/if}
+					{@render sidebarTitle('status', 'Status')}
+					<StatusSelect
+						lists={$board?.lists ?? []}
+						value={boardCard?.list_id ?? details.list_id}
+						editable={canEdit}
+						block
+						onchange={changeStatus}
+					/>
 				</section>
 
 				<section>
-					<h3 class="mb-2 text-sm font-semibold text-slate-700">Assignees</h3>
-					<ul class="space-y-1">
+					{@render sidebarTitle('users', 'Assignees')}
+					<ul class="space-y-0.5">
 						{#each $members as member (member.user_id)}
 							{@const assigned = details.assignees.some((a) => a.user_id === member.user_id)}
 							{#if canEdit || assigned}
 								<li>
-									<label class="flex items-center gap-2 text-sm">
+									<label
+										class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition {canEdit
+											? 'cursor-pointer hover:bg-white'
+											: ''} {assigned ? 'font-medium text-slate-900' : 'text-slate-600'}"
+									>
 										{#if canEdit}
 											<input
 												type="checkbox"
+												class="h-4 w-4 rounded border-slate-300 accent-indigo-600"
 												checked={assigned}
 												onchange={() => toggleAssignee(member.user_id, assigned)}
 											/>
@@ -278,12 +282,12 @@
 						{/each}
 					</ul>
 					{#if !canEdit && details.assignees.length === 0}
-						<p class="text-sm text-slate-400">Nobody assigned.</p>
+						<p class="px-2 text-sm text-slate-400">Nobody assigned.</p>
 					{/if}
 				</section>
 
 				<section>
-					<h3 class="mb-2 text-sm font-semibold text-slate-700">Due date</h3>
+					{@render sidebarTitle('calendar', 'Due date')}
 					<DatePicker
 						value={details.due_date}
 						disabled={!canEdit}
@@ -292,15 +296,16 @@
 				</section>
 
 				<section>
-					<h3 class="mb-2 text-sm font-semibold text-slate-700">Labels</h3>
-					<ul class="space-y-1">
+					{@render sidebarTitle('tag', 'Labels')}
+					<ul class="space-y-0.5">
 						{#each $labels as label (label.id)}
 							{@const attached = details.labels.some((l) => l.id === label.id)}
 							{#if canEdit || attached}
-								<li class="flex items-center gap-2">
+								<li class="group flex items-center gap-2 rounded-lg px-2 py-1 transition hover:bg-white">
 									{#if canEdit}
 										<input
 											type="checkbox"
+											class="h-4 w-4 cursor-pointer rounded border-slate-300 accent-indigo-600"
 											checked={attached}
 											aria-label="Toggle {label.name}"
 											onchange={() => toggleLabel(label, attached)}
@@ -310,9 +315,9 @@
 									{#if canEdit}
 										<button
 											type="button"
-											class="ml-auto text-xs text-slate-300 hover:text-red-600"
+											class="icon-btn ml-auto p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
 											aria-label="Delete label {label.name}"
-											onclick={() => deleteLabel(label)}>✕</button
+											onclick={() => deleteLabel(label)}><Icon name="x" class="h-3.5 w-3.5" /></button
 										>
 									{/if}
 								</li>
@@ -320,16 +325,16 @@
 						{/each}
 					</ul>
 					{#if canEdit}
-						<form class="mt-2 flex items-center gap-1" onsubmit={createLabel}>
+						<form class="mt-2 flex items-center gap-1.5" onsubmit={createLabel}>
 							<input
 								type="color"
-								class="h-7 w-8 cursor-pointer rounded border border-slate-300"
+								class="h-8 w-8 shrink-0 cursor-pointer rounded-lg border-0 bg-white p-1 shadow-sm ring-1 ring-inset ring-slate-200"
 								aria-label="Label color"
 								bind:value={newLabelColor}
 							/>
 							<input
-								class="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-								placeholder="New label"
+								class="input min-w-0 flex-1 px-2.5 py-1.5"
+								placeholder="New label, then Enter"
 								maxlength={MAX_LABEL_NAME_CHARS}
 								bind:value={newLabelName}
 							/>
@@ -338,10 +343,8 @@
 				</section>
 
 				{#if canEdit}
-					<button
-						type="button"
-						class="w-full rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
-						onclick={deleteCard}>Delete card</button
+					<button type="button" class="btn-danger btn-sm w-full" onclick={deleteCard}
+						><Icon name="trash" class="h-3.5 w-3.5" />Delete card</button
 					>
 				{/if}
 			</aside>

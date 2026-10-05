@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import * as api from '$lib/api';
+	import { accentFor } from '$lib/colors';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { toastError } from '$lib/stores/toast.store';
 	import {
 		boards,
@@ -16,6 +18,7 @@
 	let creating = $state(false);
 
 	const canCreate = $derived(hasRole($myRole, 'member'));
+	const workspaceName = $derived($currentWorkspace?.name ?? 'Workspace');
 
 	async function createBoard(event: SubmitEvent) {
 		event.preventDefault();
@@ -36,41 +39,68 @@
 	}
 </script>
 
-<aside class="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+<aside class="flex w-64 shrink-0 flex-col bg-slate-900 text-slate-300">
 	<a
 		href="/{encodeURIComponent($workspaceId ?? '')}"
-		class="block truncate border-b border-slate-100 px-4 py-3 font-semibold hover:bg-slate-50"
+		class="m-3 flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/5 {page.params
+			.boardId
+			? ''
+			: 'bg-white/10'}"
 	>
-		{$currentWorkspace?.name ?? 'Workspace'}
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-inner"
+			style:background-color={accentFor($workspaceId ?? '')}
+		>
+			{workspaceName.charAt(0).toUpperCase()}
+		</span>
+		<span class="min-w-0">
+			<span class="block truncate text-sm font-semibold text-white">{workspaceName}</span>
+			<span class="block text-xs capitalize text-slate-400">{$myRole ?? 'member'}</span>
+		</span>
 	</a>
-	<nav class="flex-1 overflow-y-auto p-2">
-		<h3 class="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Boards</h3>
+
+	<nav class="flex-1 overflow-y-auto px-3 pb-3">
+		<h3 class="px-2 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+			Boards
+		</h3>
 		<ul class="space-y-0.5">
 			{#each $boards as board (board.id)}
+				{@const active = page.params.boardId === board.id}
 				<li>
 					<a
 						href="/{encodeURIComponent($workspaceId ?? '')}/{encodeURIComponent(board.id)}"
-						class="block truncate rounded-md px-2 py-1.5 text-sm {page.params.boardId === board.id
-							? 'bg-indigo-50 font-medium text-indigo-700'
-							: 'text-slate-700 hover:bg-slate-100'}"
+						class="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition {active
+							? 'bg-white/10 font-medium text-white'
+							: 'text-slate-300 hover:bg-white/5 hover:text-white'}"
 					>
-						{board.name}
+						<span
+							class="h-2.5 w-2.5 shrink-0 rounded-[3px] {active ? '' : 'opacity-70 group-hover:opacity-100'}"
+							style:background-color={accentFor(board.id)}
+						></span>
+						<span class="truncate">{board.name}</span>
 					</a>
 				</li>
 			{:else}
-				<li class="px-2 py-1.5 text-sm text-slate-400">No boards yet</li>
+				<li class="px-2 py-1.5 text-sm text-slate-500">No boards yet</li>
 			{/each}
 		</ul>
 	</nav>
+
 	{#if canCreate}
-		<form class="border-t border-slate-100 p-3" onsubmit={createBoard}>
-			<input
-				class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-				placeholder="New board name"
-				maxlength="255"
-				bind:value={newBoardName}
-				disabled={creating}
-			/>
+		<form class="border-t border-white/10 p-3" onsubmit={createBoard}>
+			<div class="relative">
+				<Icon
+					name="plus"
+					class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+				/>
+				<input
+					class="block w-full rounded-lg border-0 bg-white/5 py-2 pl-8 pr-3 text-sm text-white ring-1 ring-inset ring-white/10 transition placeholder:text-slate-500 focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+					placeholder="New board"
+					maxlength="255"
+					bind:value={newBoardName}
+					disabled={creating}
+				/>
+			</div>
 		</form>
 	{/if}
 </aside>

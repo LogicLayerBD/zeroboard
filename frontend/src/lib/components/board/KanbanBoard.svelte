@@ -3,6 +3,8 @@
 	import { get } from 'svelte/store';
 	import { dragHandleZone, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import * as api from '$lib/api';
+	import { columnAccent } from '$lib/colors';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { FLIP_DURATION_MS, fitsBetweenNeighbours, isShadowItem, previousId } from '$lib/dnd';
 	import {
 		applyListCreated,
@@ -97,9 +99,9 @@
 	}
 </script>
 
-<div class="flex h-full items-start gap-3 overflow-x-auto p-4">
+<div class="flex h-full items-start gap-4 overflow-x-auto p-6">
 	<div
-		class="flex h-full items-start gap-3"
+		class="flex h-full items-start gap-4"
 		use:dragHandleZone={{
 			items: lists,
 			type: 'list',
@@ -111,13 +113,14 @@
 		onfinalize={handleListFinalize}
 		aria-label="Columns"
 	>
-		{#each lists as list (list.id)}
+		{#each lists as list, index (list.id)}
 			<div
 				animate:flip={{ duration: FLIP_DURATION_MS }}
 				class="h-full {isShadowItem(list) ? 'opacity-40' : ''}"
 			>
 				<KanbanList
 					{list}
+					accent={columnAccent(index)}
 					{canEdit}
 					{onopencard}
 					ondragstart={onCardDragStart}
@@ -128,15 +131,22 @@
 	</div>
 
 	{#if canEdit}
-		<form class="w-72 shrink-0 rounded-xl bg-slate-100 p-2" onsubmit={addList}>
+		<form
+			class="relative w-72 shrink-0 rounded-2xl border-2 border-dashed border-slate-300/80 bg-white/40 p-2 transition focus-within:border-indigo-300 focus-within:bg-white/70 hover:border-slate-400/70"
+			onsubmit={addList}
+		>
+			<Icon
+				name="plus"
+				class="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+			/>
 			<input
-				class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-				placeholder="+ Add column"
+				class="block w-full rounded-lg border-0 bg-transparent py-2 pl-9 pr-3 text-sm font-medium text-slate-700 placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+				placeholder="Add column"
 				maxlength={MAX_NAME_CHARS}
 				bind:value={newListName}
 			/>
 		</form>
 	{:else if lists.length === 0}
-		<p class="text-sm text-slate-500">This board has no columns yet.</p>
+		<p class="panel px-5 py-4 text-sm text-slate-500">This board has no columns yet.</p>
 	{/if}
 </div>
