@@ -113,7 +113,7 @@
 </script>
 
 <section
-	class="group/column flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl bg-slate-200/50 ring-1 ring-slate-900/5 backdrop-blur-sm"
+	class="group/column flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl bg-slate-200/50 dark:bg-slate-900/70 ring-1 ring-slate-900/5 dark:ring-white/10 backdrop-blur-sm"
 	aria-label={list.name}
 >
 	<span class="h-1 shrink-0" style:background-color={accent}></span>
@@ -121,7 +121,7 @@
 		{#if canEdit}
 			<span
 				use:dragHandle
-				class="-ml-1 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-300/50 hover:text-slate-600"
+				class="-ml-1 cursor-grab rounded p-0.5 text-slate-400 dark:text-slate-500 hover:bg-slate-300/50 dark:hover:bg-slate-700/50 hover:text-slate-600 dark:hover:text-slate-200"
 				aria-label="Drag column {list.name}"><Icon name="grip" class="h-4 w-4" strokeWidth={3} /></span
 			>
 		{/if}
@@ -138,7 +138,7 @@
 		{:else}
 			<button
 				type="button"
-				class="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 {canEdit
+				class="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 dark:text-slate-100 {canEdit
 					? 'cursor-text'
 					: 'cursor-default'}"
 				disabled={!canEdit}
@@ -147,13 +147,13 @@
 			>
 		{/if}
 		<span
-			class="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500 ring-1 ring-inset ring-slate-900/5"
+			class="rounded-full bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400 ring-1 ring-inset ring-slate-900/5 dark:ring-white/10"
 			>{list.cards.length}</span
 		>
 		{#if canEdit}
 			<button
 				type="button"
-				class="icon-btn p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/column:opacity-100"
+				class="icon-btn p-1 opacity-0 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 group-hover/column:opacity-100"
 				aria-label="Delete column {list.name}"
 				onclick={removeList}><Icon name="trash" class="h-3.5 w-3.5" /></button
 			>
@@ -199,7 +199,7 @@
 			{:else}
 				<button
 					type="button"
-					class="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+					class="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-slate-500 dark:text-slate-400 transition hover:bg-white/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-100"
 					onclick={() => (adding = true)}><Icon name="plus" />Add card</button
 				>
 			{/if}

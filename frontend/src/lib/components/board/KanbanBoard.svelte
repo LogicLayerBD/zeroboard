@@ -99,9 +99,9 @@
 	}
 </script>
 
-<div class="flex h-full items-start gap-4 overflow-x-auto p-6">
+<div class="flex h-full items-start gap-3 overflow-x-auto p-3 sm:gap-4 sm:p-6">
 	<div
-		class="flex h-full items-start gap-4"
+		class="flex h-full items-start gap-3 sm:gap-4"
 		use:dragHandleZone={{
 			items: lists,
 			type: 'list',
@@ -132,21 +132,21 @@
 
 	{#if canEdit}
 		<form
-			class="relative w-72 shrink-0 rounded-2xl border-2 border-dashed border-slate-300/80 bg-white/40 p-2 transition focus-within:border-indigo-300 focus-within:bg-white/70 hover:border-slate-400/70"
+			class="relative w-72 shrink-0 rounded-2xl border-2 border-dashed border-slate-300/80 dark:border-slate-700/80 bg-white/40 dark:bg-slate-900/40 p-2 transition focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:bg-white/70 dark:focus-within:bg-slate-900/70 hover:border-slate-400/70 dark:hover:border-slate-600"
 			onsubmit={addList}
 		>
 			<Icon
 				name="plus"
-				class="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+				class="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
 			/>
 			<input
-				class="block w-full rounded-lg border-0 bg-transparent py-2 pl-9 pr-3 text-sm font-medium text-slate-700 placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+				class="block w-full rounded-lg border-0 bg-transparent py-2 pl-9 pr-3 text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
 				placeholder="Add column"
 				maxlength={MAX_NAME_CHARS}
 				bind:value={newListName}
 			/>
 		</form>
 	{:else if lists.length === 0}
-		<p class="panel px-5 py-4 text-sm text-slate-500">This board has no columns yet.</p>
+		<p class="panel px-5 py-4 text-sm text-slate-500 dark:text-slate-400">This board has no columns yet.</p>
 	{/if}
 </div>

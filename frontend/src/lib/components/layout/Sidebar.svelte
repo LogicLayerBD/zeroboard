@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+	import { fade } from 'svelte/transition';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import * as api from '$lib/api';
 	import { accentFor } from '$lib/colors';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { toastError } from '$lib/stores/toast.store';
+	import { sidebarOpen } from '$lib/stores/ui.store';
 	import {
 		boards,
 		currentWorkspace,
@@ -14,11 +17,16 @@
 		workspaceId
 	} from '$lib/stores/workspace.store';
 
+	const BACKDROP_FADE_MS = 150;
+
 	let newBoardName = $state('');
 	let creating = $state(false);
 
 	const canCreate = $derived(hasRole($myRole, 'member'));
 	const workspaceName = $derived($currentWorkspace?.name ?? 'Workspace');
+
+	afterNavigate(() => sidebarOpen.set(false));
+	onDestroy(() => sidebarOpen.set(false));
 
 	async function createBoard(event: SubmitEvent) {
 		event.preventDefault();
@@ -39,7 +47,21 @@
 	}
 </script>
 
-<aside class="flex w-64 shrink-0 flex-col bg-slate-900 text-slate-300">
+{#if $sidebarOpen}
+	<button
+		type="button"
+		class="fixed inset-0 z-30 cursor-default bg-slate-900/50 backdrop-blur-sm md:hidden"
+		aria-label="Close sidebar"
+		onclick={() => sidebarOpen.set(false)}
+		transition:fade={{ duration: BACKDROP_FADE_MS }}
+	></button>
+{/if}
+
+<aside
+	class="fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-slate-900 text-slate-300 shadow-2xl transition-transform duration-200 dark:border-r dark:border-white/5 md:static md:z-auto md:translate-x-0 md:shadow-none {$sidebarOpen
+		? 'translate-x-0'
+		: '-translate-x-full'}"
+>
 	<a
 		href="/{encodeURIComponent($workspaceId ?? '')}"
 		class="m-3 flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/5 {page.params

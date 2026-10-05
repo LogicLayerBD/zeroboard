@@ -20,7 +20,7 @@
 		</svg>
 	</span>
 	{#if !compact}
-		<span class="text-lg font-bold tracking-tight {inverted ? 'text-white' : 'text-slate-900'}"
+		<span class="text-lg font-bold tracking-tight {inverted ? 'text-white' : 'text-slate-900 dark:text-white'}"
 			>Zero<span class="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent"
 				>Board</span
 			></span

@@ -53,8 +53,8 @@
 
 <section>
 	<div class="mb-3 flex items-center justify-between">
-		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-			<Icon name="paperclip" class="h-4 w-4 text-slate-400" />Attachments
+		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+			<Icon name="paperclip" class="h-4 w-4 text-slate-400 dark:text-slate-500" />Attachments
 		</h3>
 		{#if canEdit}
 			<label class="btn-ghost btn-sm cursor-pointer">
@@ -66,31 +66,31 @@
 	<ul class="space-y-1.5">
 		{#each attachments as attachment (attachment.id)}
 			<li
-				class="group flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm ring-1 ring-inset ring-slate-200 transition hover:ring-indigo-200"
+				class="group flex items-center gap-3 rounded-xl bg-white dark:bg-slate-900 px-3 py-2.5 text-sm ring-1 ring-inset ring-slate-200 dark:ring-slate-700 transition hover:ring-indigo-200 dark:hover:ring-indigo-500/40"
 			>
-				<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500"
+				<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
 					><Icon name="file" /></span
 				>
 				<button
 					type="button"
-					class="flex-1 truncate text-left font-medium text-slate-800 hover:text-indigo-600"
+					class="flex-1 truncate text-left font-medium text-slate-800 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-300"
 					onclick={() => download(attachment)}>{attachment.filename}</button
 				>
-				<span class="text-xs text-slate-400">{formatBytes(attachment.size_bytes)}</span>
-				<span class="hidden text-xs text-slate-400 sm:inline"
+				<span class="text-xs text-slate-400 dark:text-slate-500">{formatBytes(attachment.size_bytes)}</span>
+				<span class="hidden text-xs text-slate-400 dark:text-slate-500 sm:inline"
 					>{formatDateTime(attachment.uploaded_at)}</span
 				>
 				{#if canEdit}
 					<button
 						type="button"
-						class="icon-btn p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+						class="icon-btn p-1 opacity-0 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
 						aria-label="Delete {attachment.filename}"
 						onclick={() => remove(attachment)}><Icon name="x" class="h-3.5 w-3.5" /></button
 					>
 				{/if}
 			</li>
 		{:else}
-			<li class="text-sm text-slate-400">No attachments.</li>
+			<li class="text-sm text-slate-400 dark:text-slate-500">No attachments.</li>
 		{/each}
 	</ul>
 </section>

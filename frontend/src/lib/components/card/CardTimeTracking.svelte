@@ -56,11 +56,11 @@
 
 <section>
 	<div class="mb-3 flex items-center justify-between">
-		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-			<Icon name="clock" class="h-4 w-4 text-slate-400" />Time tracking
+		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+			<Icon name="clock" class="h-4 w-4 text-slate-400 dark:text-slate-500" />Time tracking
 		</h3>
 		<span
-			class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200"
+			class="rounded-full bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-500/30"
 			>Total {formatMinutes(total)}</span
 		>
 	</div>
@@ -88,18 +88,18 @@
 			>
 		</form>
 	{/if}
-	<ul class="divide-y divide-slate-100">
+	<ul class="divide-y divide-slate-100 dark:divide-slate-800">
 		{#each entries as entry (entry.id)}
 			<li class="group flex items-center gap-3 py-2 text-sm">
-				<span class="w-14 font-semibold tabular-nums text-slate-900">{formatMinutes(entry.minutes)}</span>
-				<span class="flex-1 truncate text-slate-600">{entry.description ?? ''}</span>
-				<span class="text-xs text-slate-400"
+				<span class="w-14 font-semibold tabular-nums text-slate-900 dark:text-white">{formatMinutes(entry.minutes)}</span>
+				<span class="flex-1 truncate text-slate-600 dark:text-slate-300">{entry.description ?? ''}</span>
+				<span class="text-xs text-slate-400 dark:text-slate-500"
 					>{memberName.get(entry.user_id) ?? 'Former member'} · {formatDateTime(entry.logged_at)}</span
 				>
 				{#if canEdit && (entry.user_id === $currentUser?.id || $myRole === 'admin')}
 					<button
 						type="button"
-						class="icon-btn p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+						class="icon-btn p-1 opacity-0 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
 						aria-label="Delete time entry"
 						onclick={() => remove(entry)}><Icon name="x" class="h-3.5 w-3.5" /></button
 					>

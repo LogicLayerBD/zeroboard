@@ -21,7 +21,7 @@
 	{#if value !== null && !disabled}
 		<button
 			type="button"
-			class="text-xs font-medium text-slate-400 transition hover:text-red-600"
+			class="text-xs font-medium text-slate-400 dark:text-slate-500 transition hover:text-red-600 dark:hover:text-red-400"
 			onclick={() => onchange(null)}>Clear</button
 		>
 	{/if}

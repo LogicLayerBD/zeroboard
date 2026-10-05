@@ -39,8 +39,8 @@
 
 <section>
 	<div class="mb-3 flex items-center justify-between">
-		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-			<Icon name="text" class="h-4 w-4 text-slate-400" />Description
+		<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+			<Icon name="text" class="h-4 w-4 text-slate-400 dark:text-slate-500" />Description
 		</h3>
 		{#if canEdit && !editing}
 			<button type="button" class="btn-ghost btn-sm" onclick={startEdit}
@@ -69,18 +69,18 @@
 			>
 		</div>
 	{:else if html}
-		<div class="break-words rounded-xl bg-slate-50/70 p-4 text-sm leading-relaxed text-slate-700 ring-1 ring-inset ring-slate-100">
+		<div class="break-words rounded-xl bg-slate-50/70 dark:bg-slate-800/30 p-4 text-sm leading-relaxed text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-100 dark:ring-slate-800">
 			{@html html}
 		</div>
 	{:else}
 		{#if canEdit}
 			<button
 				type="button"
-				class="w-full rounded-xl border-2 border-dashed border-slate-200 p-4 text-left text-sm text-slate-400 transition hover:border-indigo-300 hover:text-indigo-600"
+				class="w-full rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-4 text-left text-sm text-slate-400 dark:text-slate-500 transition hover:border-indigo-300 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300"
 				onclick={startEdit}>Add a more detailed description…</button
 			>
 		{:else}
-			<p class="text-sm text-slate-400">No description.</p>
+			<p class="text-sm text-slate-400 dark:text-slate-500">No description.</p>
 		{/if}
 	{/if}
 </section>

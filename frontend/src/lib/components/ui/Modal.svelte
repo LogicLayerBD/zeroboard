@@ -22,13 +22,13 @@
 <svelte:window {onkeydown} />
 
 <div
-	class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm sm:p-10"
+	class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm sm:p-10"
 	transition:fade={{ duration: BACKDROP_FADE_MS }}
 >
 	<button type="button" class="fixed inset-0 cursor-default" aria-label="Close" onclick={onclose}
 	></button>
 	<div
-		class="relative w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+		class="relative min-h-full w-full max-w-4xl overflow-hidden sm:min-h-0 sm:rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-900/10 dark:ring-white/10"
 		role="dialog"
 		aria-modal="true"
 		aria-label={label}

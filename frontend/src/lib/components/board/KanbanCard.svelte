@@ -21,7 +21,7 @@
 
 <button
 	type="button"
-	class="group block w-full rounded-xl bg-white p-3 text-left shadow-card ring-1 ring-slate-900/5 transition hover:-translate-y-px hover:shadow-lift hover:ring-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+	class="group block w-full rounded-xl bg-white dark:bg-slate-800 p-3 text-left shadow-card ring-1 ring-slate-900/5 dark:ring-white/10 transition hover:-translate-y-px hover:shadow-lift hover:ring-indigo-200 dark:hover:ring-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
 	onclick={() => onopen(card.id)}
 >
 	{#if cardLabels.length > 0}
@@ -31,16 +31,16 @@
 			{/each}
 		</div>
 	{/if}
-	<p class="break-words text-sm font-medium leading-snug text-slate-800 group-hover:text-slate-950">
+	<p class="break-words text-sm font-medium leading-snug text-slate-800 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white">
 		{card.title}
 	</p>
 	{#if card.due_date !== null || card.description || assignees.length > 0}
-		<div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
+		<div class="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
 			{#if card.due_date !== null}
 				<span
 					class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium {overdue
-						? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200'
-						: 'bg-slate-100 text-slate-600'}"
+						? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-200 dark:ring-red-500/30'
+						: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}"
 					title={overdue ? 'Overdue' : 'Due date'}
 				>
 					<Icon name="calendar" class="h-3 w-3" />
@@ -48,7 +48,7 @@
 				</span>
 			{/if}
 			{#if card.description}
-				<span class="text-slate-400" title="Has description"><Icon name="text" class="h-3.5 w-3.5" /></span>
+				<span class="text-slate-400 dark:text-slate-500" title="Has description"><Icon name="text" class="h-3.5 w-3.5" /></span>
 			{/if}
 			<span class="ml-auto flex -space-x-1.5">
 				{#each assignees as member (member.user_id)}

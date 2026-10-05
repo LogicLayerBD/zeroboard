@@ -41,7 +41,7 @@
 <AuthCard title="Create your account">
 	<form class="space-y-5" onsubmit={submit}>
 		<label class="block">
-			<span class="mb-1.5 block text-sm font-medium text-slate-700">Name</span>
+			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Name</span>
 			<input
 				autocomplete="name"
 				required
@@ -51,7 +51,7 @@
 			/>
 		</label>
 		<label class="block">
-			<span class="mb-1.5 block text-sm font-medium text-slate-700">Email</span>
+			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Email</span>
 			<input
 				type="email"
 				autocomplete="email"
@@ -62,7 +62,7 @@
 			/>
 		</label>
 		<label class="block">
-			<span class="mb-1.5 block text-sm font-medium text-slate-700">Password</span>
+			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Password</span>
 			<input
 				type="password"
 				autocomplete="new-password"
@@ -71,10 +71,10 @@
 				class="input w-full py-2.5"
 				bind:value={password}
 			/>
-			<span class="mt-1 block text-xs text-slate-400">At least {MIN_PASSWORD_CHARS} characters.</span>
+			<span class="mt-1 block text-xs text-slate-400 dark:text-slate-500">At least {MIN_PASSWORD_CHARS} characters.</span>
 		</label>
 		{#if error}
-			<p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200" role="alert">{error}</p>
+			<p class="rounded-lg bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-200 dark:ring-red-500/30" role="alert">{error}</p>
 		{/if}
 		<button
 			type="submit"
@@ -82,7 +82,7 @@
 			disabled={submitting}>{submitting ? 'Creating account…' : 'Create account'}</button
 		>
 	</form>
-	<p class="mt-8 text-center text-sm text-slate-500">
+	<p class="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
 		Already have an account? <a href="/login" class="link"
 			>Sign in</a
 		>

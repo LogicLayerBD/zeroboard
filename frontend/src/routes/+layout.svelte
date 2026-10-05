@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '@fontsource-variable/inter';
 	import '../app.css';
-	import { onMount, type Snippet } from 'svelte';
+	import { onDestroy, onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { setUnauthorizedHandler } from '$lib/api';
@@ -10,6 +10,7 @@
 	import Toast from '$lib/components/ui/Toast.svelte';
 	import { authReady, currentUser, endSession, initAuth } from '$lib/stores/auth.store';
 	import { clearNotifications, loadNotifications } from '$lib/stores/notifications.store';
+	import { startThemeSync } from '$lib/stores/theme.store';
 	import { loadWorkspaces, workspaces } from '$lib/stores/workspace.store';
 	import { startRealtime, stopRealtime } from '$lib/ws';
 
@@ -23,6 +24,9 @@
 
 	const isPublic = $derived(PUBLIC_PATHS.includes(page.url.pathname));
 	const userId = $derived($currentUser?.id ?? null);
+
+	// Applied during init (not onMount) so the first paint already uses the right theme.
+	onDestroy(startThemeSync());
 
 	onMount(() => {
 		setUnauthorizedHandler(() => {

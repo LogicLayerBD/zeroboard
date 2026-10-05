@@ -26,9 +26,9 @@
 	const ROLES: WorkspaceRole[] = ['admin', 'member', 'viewer'];
 	const DEFAULT_INVITE_ROLE: WorkspaceRole = 'member';
 	const ROLE_BADGE: Record<WorkspaceRole, string> = {
-		admin: 'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200',
-		member: 'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200',
-		viewer: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200'
+		admin: 'bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-inset ring-violet-200 dark:ring-violet-500/30',
+		member: 'bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-inset ring-sky-200 dark:ring-sky-500/30',
+		viewer: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-200 dark:ring-slate-700'
 	};
 
 	let inviteEmail = $state('');
@@ -122,8 +122,8 @@
 	{#if $workspaceLoading}
 		<Spinner />
 	{:else}
-		<div class="border-b border-slate-200 bg-white">
-			<div class="mx-auto flex max-w-5xl items-center gap-4 px-8 py-8">
+		<div class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+			<div class="mx-auto flex max-w-5xl items-center gap-4 px-4 py-6 sm:px-8 sm:py-8">
 				<span
 					class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-2xl font-bold text-white shadow-lg"
 					style:background-color={accentFor($currentWorkspace?.id ?? '')}
@@ -142,7 +142,7 @@
 						</form>
 					{:else}
 						<div class="flex items-center gap-2">
-							<h1 class="truncate text-3xl font-bold tracking-tight text-slate-900">
+							<h1 class="truncate text-2xl font-bold sm:text-3xl tracking-tight text-slate-900 dark:text-white">
 								{$currentWorkspace?.name ?? ''}
 							</h1>
 							{#if isAdmin}
@@ -152,7 +152,7 @@
 							{/if}
 						</div>
 					{/if}
-					<p class="mt-1 flex items-center gap-3 text-sm text-slate-500">
+					<p class="mt-1 flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
 						<span class="inline-flex items-center gap-1"
 							><Icon name="kanban" class="h-3.5 w-3.5" />{$boards.length} boards</span
 						>
@@ -164,7 +164,7 @@
 			</div>
 		</div>
 
-		<div class="mx-auto max-w-5xl px-8 py-8">
+		<div class="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
 			<section>
 				<h2 class="section-title mb-3">Boards</h2>
 				<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -181,14 +181,14 @@
 									style:background-color={accent}
 								></span>
 								<span class="relative flex items-start gap-2">
-									<Icon name="kanban" class="mt-0.5 h-4 w-4 text-slate-400" />
-									<span class="font-semibold text-slate-900">{board.name}</span>
+									<Icon name="kanban" class="mt-0.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+									<span class="font-semibold text-slate-900 dark:text-white">{board.name}</span>
 								</span>
 							</a>
 						</li>
 					{:else}
 						<li
-							class="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 sm:col-span-2 lg:col-span-3"
+							class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:col-span-2 lg:col-span-3"
 						>
 							No boards yet. Create one from the sidebar.
 						</li>
@@ -198,18 +198,18 @@
 
 			<section class="mt-12 max-w-3xl">
 				<h2 class="section-title mb-3">Members</h2>
-				<ul class="panel divide-y divide-slate-100">
+				<ul class="panel divide-y divide-slate-100 dark:divide-slate-800">
 					{#each $members as member (member.user_id)}
-						<li class="flex items-center gap-3 px-5 py-3.5">
+						<li class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:flex-nowrap sm:px-5">
 							<Avatar name={member.name} color={member.avatar_color} />
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium text-slate-900">
+								<p class="truncate text-sm font-medium text-slate-900 dark:text-white">
 									{member.name}
-									{#if member.user_id === $currentUser?.id}<span class="font-normal text-slate-400"
+									{#if member.user_id === $currentUser?.id}<span class="font-normal text-slate-400 dark:text-slate-500"
 											>(you)</span
 										>{/if}
 								</p>
-								<p class="truncate text-xs text-slate-500">
+								<p class="truncate text-xs text-slate-500 dark:text-slate-400">
 									{member.email} · joined {formatDate(member.joined_at)}
 								</p>
 							</div>
@@ -226,7 +226,7 @@
 								</select>
 								<button
 									type="button"
-									class="icon-btn hover:bg-red-50 hover:text-red-600"
+									class="icon-btn hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
 									aria-label="Remove {member.name}"
 									title="Remove {member.name}"
 									onclick={() => remove(member.user_id, member.name)}
@@ -244,8 +244,8 @@
 
 				{#if isAdmin}
 					<form class="panel mt-4 p-5" onsubmit={invite}>
-						<p class="text-sm font-semibold text-slate-900">Invite a teammate</p>
-						<p class="mt-0.5 text-xs text-slate-500">
+						<p class="text-sm font-semibold text-slate-900 dark:text-white">Invite a teammate</p>
+						<p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
 							Teammates need an account first: they register, then you add them by email.
 						</p>
 						<div class="mt-4 flex flex-wrap gap-2">
@@ -266,9 +266,9 @@
 						</div>
 					</form>
 
-					<div class="mt-12 rounded-2xl border border-red-200 bg-red-50/50 p-5">
-						<h3 class="text-sm font-semibold text-red-700">Danger zone</h3>
-						<p class="mt-1 text-sm text-slate-600">
+					<div class="mt-12 rounded-2xl border border-red-200 dark:border-red-500/30 bg-red-50/50 dark:bg-red-500/5 p-5">
+						<h3 class="text-sm font-semibold text-red-700 dark:text-red-400">Danger zone</h3>
+						<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
 							Deleting the workspace archives its boards and removes all members.
 						</p>
 						<button type="button" class="btn-danger mt-4" onclick={deleteWorkspace}

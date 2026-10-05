@@ -185,9 +185,9 @@
 	{#if !details}
 		<div class="p-10"><Spinner /></div>
 	{:else}
-		<div class="flex items-start gap-3 border-b border-slate-100 px-6 pb-5 pt-6">
+		<div class="flex items-start gap-3 border-b border-slate-100 dark:border-slate-800 px-4 pb-4 pt-5 sm:px-6 sm:pb-5 sm:pt-6">
 			<div class="min-w-0 flex-1">
-				<div class="mb-2 flex items-center gap-2 px-1.5 text-xs text-slate-500">
+				<div class="mb-2 flex flex-wrap items-center gap-2 px-1.5 text-xs text-slate-500 dark:text-slate-400">
 					<StatusSelect
 						lists={$board?.lists ?? []}
 						value={boardCard?.list_id ?? details.list_id}
@@ -197,7 +197,7 @@
 				</div>
 				{#if canEdit}
 					<input
-						class="input-inline w-full text-2xl font-bold tracking-tight text-slate-900"
+						class="input-inline w-full text-xl font-bold sm:text-2xl tracking-tight text-slate-900 dark:text-white"
 						maxlength={MAX_TITLE_CHARS}
 						aria-label="Card title"
 						bind:value={titleDraft}
@@ -207,7 +207,7 @@
 						}}
 					/>
 				{:else}
-					<h2 class="px-1.5 text-2xl font-bold tracking-tight text-slate-900">{details.title}</h2>
+					<h2 class="px-1.5 text-xl font-bold sm:text-2xl tracking-tight text-slate-900 dark:text-white">{details.title}</h2>
 				{/if}
 			</div>
 			<button type="button" class="icon-btn" aria-label="Close" onclick={onclose}
@@ -216,7 +216,7 @@
 		</div>
 
 		<div class="grid md:grid-cols-[1fr_17rem]">
-			<div class="space-y-8 p-6">
+			<div class="min-w-0 space-y-8 p-4 sm:p-6">
 				<CardDescription
 					description={details.description}
 					{canEdit}
@@ -242,7 +242,7 @@
 				/>
 			</div>
 
-			<aside class="space-y-6 border-t border-slate-100 bg-slate-50/70 p-6 md:border-l md:border-t-0">
+			<aside class="space-y-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 p-4 sm:p-6 md:border-l md:border-t-0">
 				<section>
 					{@render sidebarTitle('status', 'Status')}
 					<StatusSelect
@@ -263,13 +263,13 @@
 								<li>
 									<label
 										class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition {canEdit
-											? 'cursor-pointer hover:bg-white'
-											: ''} {assigned ? 'font-medium text-slate-900' : 'text-slate-600'}"
+											? 'cursor-pointer hover:bg-white dark:hover:bg-slate-800'
+											: ''} {assigned ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}"
 									>
 										{#if canEdit}
 											<input
 												type="checkbox"
-												class="h-4 w-4 rounded border-slate-300 accent-indigo-600"
+												class="h-4 w-4 rounded border-slate-300 dark:border-slate-700 accent-indigo-600"
 												checked={assigned}
 												onchange={() => toggleAssignee(member.user_id, assigned)}
 											/>
@@ -282,7 +282,7 @@
 						{/each}
 					</ul>
 					{#if !canEdit && details.assignees.length === 0}
-						<p class="px-2 text-sm text-slate-400">Nobody assigned.</p>
+						<p class="px-2 text-sm text-slate-400 dark:text-slate-500">Nobody assigned.</p>
 					{/if}
 				</section>
 
@@ -301,11 +301,11 @@
 						{#each $labels as label (label.id)}
 							{@const attached = details.labels.some((l) => l.id === label.id)}
 							{#if canEdit || attached}
-								<li class="group flex items-center gap-2 rounded-lg px-2 py-1 transition hover:bg-white">
+								<li class="group flex items-center gap-2 rounded-lg px-2 py-1 transition hover:bg-white dark:hover:bg-slate-800">
 									{#if canEdit}
 										<input
 											type="checkbox"
-											class="h-4 w-4 cursor-pointer rounded border-slate-300 accent-indigo-600"
+											class="h-4 w-4 cursor-pointer rounded border-slate-300 dark:border-slate-700 accent-indigo-600"
 											checked={attached}
 											aria-label="Toggle {label.name}"
 											onchange={() => toggleLabel(label, attached)}
@@ -315,7 +315,7 @@
 									{#if canEdit}
 										<button
 											type="button"
-											class="icon-btn ml-auto p-1 opacity-0 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+											class="icon-btn ml-auto p-1 opacity-0 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
 											aria-label="Delete label {label.name}"
 											onclick={() => deleteLabel(label)}><Icon name="x" class="h-3.5 w-3.5" /></button
 										>
@@ -328,7 +328,7 @@
 						<form class="mt-2 flex items-center gap-1.5" onsubmit={createLabel}>
 							<input
 								type="color"
-								class="h-8 w-8 shrink-0 cursor-pointer rounded-lg border-0 bg-white p-1 shadow-sm ring-1 ring-inset ring-slate-200"
+								class="h-8 w-8 shrink-0 cursor-pointer rounded-lg border-0 bg-white dark:bg-slate-900 p-1 shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-slate-700"
 								aria-label="Label color"
 								bind:value={newLabelColor}
 							/>

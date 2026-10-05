@@ -16,12 +16,12 @@
 
 <!-- The per-user color is data, so it cannot be a static Tailwind class. -->
 <span
-	class="relative inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-white ring-2 ring-white {sizeClass}"
+	class="relative inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-white ring-2 ring-white dark:ring-slate-900 {sizeClass}"
 	style:background-color={color}
 	title={name}
 >
 	{initials(name)}
 	{#if online}
-		<span class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+		<span class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
 	{/if}
 </span>

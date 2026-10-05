@@ -113,7 +113,7 @@
 {#if $boardLoading || !$board}
 	<Spinner />
 {:else}
-	<header class="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-6 py-3">
+	<header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 sm:px-6">
 		<span
 			class="h-7 w-7 shrink-0 rounded-lg shadow-inner"
 			style:background-color={accentFor($board.id)}
@@ -128,7 +128,7 @@
 				/>
 			</form>
 		{:else}
-			<h1 class="text-xl font-bold tracking-tight text-slate-900">{$board.name}</h1>
+			<h1 class="min-w-0 truncate text-lg font-bold tracking-tight sm:text-xl text-slate-900 dark:text-white">{$board.name}</h1>
 			{#if isAdmin}
 				<button type="button" class="icon-btn" aria-label="Rename board" onclick={startRename}
 					><Icon name="pencil" /></button
@@ -138,7 +138,7 @@
 
 		{#if viewers.length > 0}
 			<div
-				class="ml-2 flex items-center gap-2 rounded-full bg-emerald-50 py-1 pl-1 pr-3 ring-1 ring-inset ring-emerald-200"
+				class="ml-2 flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-500/10 py-1 pl-1 pr-3 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-500/30"
 				aria-label="Members viewing this board"
 			>
 				<div class="flex -space-x-1.5">
@@ -146,28 +146,32 @@
 						<Avatar name={member.name} color={member.avatar_color} size="sm" online />
 					{/each}
 				</div>
-				<span class="text-xs font-medium text-emerald-700">{viewers.length} here now</span>
+				<span class="hidden text-xs font-medium text-emerald-700 dark:text-emerald-400 sm:inline"
+					>{viewers.length} here now</span
+				>
 			</div>
 		{/if}
 
 		<div class="ml-auto flex items-center gap-2">
-			<div class="flex rounded-lg bg-slate-100 p-1 text-sm" role="group" aria-label="View">
+			<div class="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1 text-sm" role="group" aria-label="View">
 				{#each VIEWS as option (option.value)}
 					<button
 						type="button"
 						class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition {view ===
 						option.value
-							? 'bg-white text-slate-900 shadow-sm'
-							: 'text-slate-500 hover:text-slate-800'}"
+							? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+							: 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'}"
 						aria-pressed={view === option.value}
-						onclick={() => (view = option.value)}><Icon name={option.icon} />{option.label}</button
+						aria-label={option.label}
+						onclick={() => (view = option.value)}
+						><Icon name={option.icon} /><span class="hidden sm:inline">{option.label}</span></button
 					>
 				{/each}
 			</div>
 			{#if isAdmin}
 				<button
 					type="button"
-					class="icon-btn hover:bg-red-50 hover:text-red-600"
+					class="icon-btn hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
 					aria-label="Archive board"
 					title="Archive board"
 					onclick={archive}><Icon name="archive" /></button
@@ -176,7 +180,7 @@
 		</div>
 	</header>
 
-	<div class="min-h-0 flex-1 bg-gradient-to-br from-slate-100 via-indigo-50/60 to-violet-50/60">
+	<div class="min-h-0 flex-1 bg-gradient-to-br from-slate-100 dark:from-slate-950 via-indigo-50/60 dark:via-slate-950 to-violet-50/60 dark:to-indigo-950/50">
 		{#if view === 'kanban'}
 			<KanbanBoard lists={$board.lists} {canEdit} onopencard={openCard} />
 		{:else}

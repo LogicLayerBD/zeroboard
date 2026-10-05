@@ -72,8 +72,8 @@
 </script>
 
 <section>
-	<h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-		<Icon name="message" class="h-4 w-4 text-slate-400" />Comments
+	<h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+		<Icon name="message" class="h-4 w-4 text-slate-400 dark:text-slate-500" />Comments
 	</h3>
 	<ul class="space-y-4">
 		{#each comments as comment (comment.id)}
@@ -86,10 +86,10 @@
 				/>
 				<div class="min-w-0 flex-1">
 					<div class="flex items-baseline gap-2 text-xs">
-						<span class="font-semibold text-slate-700">{author?.name ?? 'Former member'}</span>
-						<span class="text-slate-400">{formatDateTime(comment.created_at)}</span>
+						<span class="font-semibold text-slate-700 dark:text-slate-200">{author?.name ?? 'Former member'}</span>
+						<span class="text-slate-400 dark:text-slate-500">{formatDateTime(comment.created_at)}</span>
 						{#if comment.updated_at !== comment.created_at}
-							<span class="text-slate-400">(edited)</span>
+							<span class="text-slate-400 dark:text-slate-500">(edited)</span>
 						{/if}
 					</div>
 					{#if editingId === comment.id}
@@ -113,7 +113,7 @@
 						</div>
 					{:else}
 						<p
-							class="mt-1 whitespace-pre-wrap break-words rounded-xl rounded-tl-sm bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 ring-1 ring-inset ring-slate-100"
+							class="mt-1 whitespace-pre-wrap break-words rounded-xl rounded-tl-sm bg-slate-50 dark:bg-slate-800/50 px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-100 dark:ring-slate-800"
 						>
 							{comment.body}
 						</p>
@@ -121,14 +121,14 @@
 							{#if canEdit && comment.user_id === $currentUser?.id}
 								<button
 									type="button"
-									class="text-slate-400 transition hover:text-slate-700"
+									class="text-slate-400 dark:text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-100"
 									onclick={() => startEdit(comment)}>Edit</button
 								>
 							{/if}
 							{#if canEdit && (comment.user_id === $currentUser?.id || $myRole === 'admin')}
 								<button
 									type="button"
-									class="text-slate-400 transition hover:text-red-600"
+									class="text-slate-400 dark:text-slate-500 transition hover:text-red-600 dark:hover:text-red-400"
 									onclick={() => remove(comment)}>Delete</button
 								>
 							{/if}
@@ -137,7 +137,7 @@
 				</div>
 			</li>
 		{:else}
-			<li class="text-sm text-slate-400">No comments yet.</li>
+			<li class="text-sm text-slate-400 dark:text-slate-500">No comments yet.</li>
 		{/each}
 	</ul>
 	{#if canEdit}

@@ -35,19 +35,19 @@
 
 <svelte:head><title>Admin · ZeroBoard</title></svelte:head>
 
-<div class="mx-auto w-full max-w-5xl overflow-y-auto p-8">
-	<p class="text-sm font-medium text-indigo-600">Instance</p>
-	<h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Admin</h1>
+<div class="mx-auto w-full max-w-5xl overflow-y-auto p-4 sm:p-8">
+	<p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">Instance</p>
+	<h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Admin</h1>
 	{#if !isAdmin}
-		<p class="mt-4 text-sm text-slate-500">Only instance administrators can view this page.</p>
+		<p class="mt-4 text-sm text-slate-500 dark:text-slate-400">Only instance administrators can view this page.</p>
 	{:else if !info || !storage}
 		<Spinner />
 	{:else}
-		<section class="mt-8 grid gap-4 sm:grid-cols-4">
+		<section class="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
 			{#each [['Version', info.version], ['Uptime', formatUptime(info.uptime_seconds)], ['Database', formatBytes(info.db_size_bytes)], ['Users', String(info.user_count)]] as [label, value] (label)}
 				<div class="panel p-5">
 					<p class="section-title">{label}</p>
-					<p class="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+					<p class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{value}</p>
 				</div>
 			{/each}
 		</section>
@@ -57,7 +57,7 @@
 				Attachment storage · {formatBytes(storage.total_bytes)} in {storage.attachment_count} files
 			</h2>
 			<table class="panel w-full border-separate border-spacing-0 overflow-hidden text-sm">
-				<thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+				<thead class="bg-slate-50 dark:bg-slate-800/50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
 					<tr>
 						<th class="px-5 py-3">Workspace</th>
 						<th class="px-5 py-3 text-right">Files</th>
@@ -66,19 +66,19 @@
 				</thead>
 				<tbody>
 					{#each storage.workspaces as row (row.workspace_id ?? 'archived')}
-						<tr class="hover:bg-slate-50">
-							<td class="border-t border-slate-100 px-5 py-3 font-medium text-slate-800"
+						<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+							<td class="border-t border-slate-100 dark:border-slate-800 px-5 py-3 font-medium text-slate-800 dark:text-slate-100"
 								>{row.workspace_name ?? 'Archived boards'}</td
 							>
-							<td class="border-t border-slate-100 px-5 py-3 text-right tabular-nums"
+							<td class="border-t border-slate-100 dark:border-slate-800 px-5 py-3 text-right tabular-nums"
 								>{row.attachment_count}</td
 							>
-							<td class="border-t border-slate-100 px-5 py-3 text-right tabular-nums"
+							<td class="border-t border-slate-100 dark:border-slate-800 px-5 py-3 text-right tabular-nums"
 								>{formatBytes(row.size_bytes)}</td
 							>
 						</tr>
 					{:else}
-						<tr><td colspan="3" class="px-4 py-6 text-center text-slate-500">No attachments yet.</td></tr>
+						<tr><td colspan="3" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No attachments yet.</td></tr>
 					{/each}
 				</tbody>
 			</table>

@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Logo from '$lib/components/ui/Logo.svelte';
+	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 
 	interface Props {
 		title: string;
@@ -57,10 +58,11 @@
 		<p class="relative text-xs text-slate-500">Self-hosted project management for small teams.</p>
 	</section>
 
-	<section class="flex items-center justify-center bg-white p-6 sm:p-12">
+	<section class="relative flex items-center justify-center bg-white p-6 dark:bg-slate-950 sm:p-12">
+		<div class="absolute right-4 top-4"><ThemeToggle /></div>
 		<div class="w-full max-w-sm">
 			<div class="mb-8 lg:hidden"><Logo /></div>
-			<h1 class="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+			<h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
 			<div class="mt-8">
 				{@render children()}
 			</div>
