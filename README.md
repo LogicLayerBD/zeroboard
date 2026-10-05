@@ -142,4 +142,4 @@ make release
 
 ## License
 
-MIT © [LogicLayer]
+MIT © LogicLayer
