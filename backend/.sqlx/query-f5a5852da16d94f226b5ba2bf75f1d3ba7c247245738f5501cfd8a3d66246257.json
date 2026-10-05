@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO users (id, email, name, password, role, created_at, updated_at)\n           VALUES ($1, $2, $3, $4,\n                   CASE WHEN $5 AND NOT EXISTS (SELECT 1 FROM users) THEN 'admin' ELSE 'member' END,\n                   $6, $7)\n           RETURNING id AS \"id!\", email AS \"email!\", name AS \"name!\", password AS \"password!\",\n                     avatar_color AS \"avatar_color!\", role AS \"role!: UserRole\",\n                     created_at AS \"created_at!\", updated_at AS \"updated_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "email!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "password!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "avatar_color!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "role!: UserRole",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 7,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f5a5852da16d94f226b5ba2bf75f1d3ba7c247245738f5501cfd8a3d66246257"
+}
