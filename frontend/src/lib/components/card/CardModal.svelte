@@ -12,6 +12,7 @@
 		applyCardUpdated,
 		board,
 		labels,
+		moveCardToList,
 		removeLabelLocally,
 		setCardRelations
 	} from '$lib/stores/board.store';
@@ -96,6 +97,16 @@
 			return;
 		}
 		void update({ title }).catch(() => (titleDraft = details?.title ?? ''));
+	}
+
+	async function changeStatus(select: HTMLSelectElement) {
+		if (!details || select.value === details.list_id) return;
+		const moved = await moveCardToList(details.id, select.value);
+		if (moved && details) {
+			details = { ...details, ...moved };
+		} else if (details) {
+			select.value = details.list_id;
+		}
 	}
 
 	async function toggleAssignee(userId: string, assigned: boolean) {
@@ -187,7 +198,7 @@
 					<h2 class="px-1 text-xl font-semibold">{details.title}</h2>
 				{/if}
 				<p class="mt-1 px-1 text-xs text-slate-500">
-					in <span class="font-medium">{listName}</span> · created {formatDateTime(details.created_at)}
+					created {formatDateTime(details.created_at)}
 				</p>
 			</div>
 			<button
@@ -226,6 +237,24 @@
 			</div>
 
 			<aside class="space-y-6">
+				<section>
+					<h3 class="mb-2 text-sm font-semibold text-slate-700">Status</h3>
+					{#if canEdit}
+						<select
+							class="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+							aria-label="Status"
+							value={boardCard?.list_id ?? details.list_id}
+							onchange={(e) => changeStatus(e.currentTarget)}
+						>
+							{#each $board?.lists ?? [] as list (list.id)}
+								<option value={list.id}>{list.name}</option>
+							{/each}
+						</select>
+					{:else}
+						<p class="text-sm">{listName}</p>
+					{/if}
+				</section>
+
 				<section>
 					<h3 class="mb-2 text-sm font-semibold text-slate-700">Assignees</h3>
 					<ul class="space-y-1">

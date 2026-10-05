@@ -71,8 +71,8 @@
 	async function removeList() {
 		const message =
 			list.cards.length > 0
-				? `Delete "${list.name}" and its ${list.cards.length} card(s)?`
-				: `Delete "${list.name}"?`;
+				? `Delete the "${list.name}" column and its ${list.cards.length} card(s)?`
+				: `Delete the "${list.name}" column?`;
 		if (!confirm(message)) return;
 		try {
 			await api.deleteList(list.id);
@@ -115,7 +115,7 @@
 			<span
 				use:dragHandle
 				class="cursor-grab px-1 text-slate-400 hover:text-slate-600"
-				aria-label="Drag list {list.name}">⋮⋮</span
+				aria-label="Drag column {list.name}">⋮⋮</span
 			>
 		{/if}
 		{#if renaming}
@@ -132,7 +132,7 @@
 				type="button"
 				class="flex-1 truncate text-left text-sm font-semibold text-slate-700"
 				disabled={!canEdit}
-				title={canEdit ? 'Rename list' : list.name}
+				title={canEdit ? 'Rename column' : list.name}
 				onclick={startRename}>{list.name}</button
 			>
 		{/if}
@@ -141,7 +141,7 @@
 			<button
 				type="button"
 				class="rounded px-1 text-slate-400 hover:bg-slate-200 hover:text-red-600"
-				aria-label="Delete list {list.name}"
+				aria-label="Delete column {list.name}"
 				onclick={removeList}>✕</button
 			>
 		{/if}

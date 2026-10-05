@@ -5,10 +5,10 @@
 	import * as api from '$lib/api';
 	import { FLIP_DURATION_MS, fitsBetweenNeighbours, isShadowItem, previousId } from '$lib/dnd';
 	import {
-		applyCardMoved,
 		applyListCreated,
 		applyListReordered,
 		board,
+		persistCardMove,
 		reloadBoard,
 		setLists
 	} from '$lib/stores/board.store';
@@ -51,19 +51,7 @@
 		const origin = cardOrigin;
 		cardOrigin = null;
 		if (origin?.id === cardId && origin.listId === listId && origin.afterId === afterId) return;
-		try {
-			const moved = await api.moveCard(cardId, listId, afterId);
-			const target = currentList(moved.list_id);
-			// The server may renumber siblings to make room; our copies would then be stale.
-			if (target && fitsBetweenNeighbours(target.cards, moved.id, moved.position)) {
-				applyCardMoved(moved.id, moved.list_id, moved.position);
-			} else {
-				await reloadBoard();
-			}
-		} catch (err) {
-			toastError(err);
-			await reloadBoard();
-		}
+		await persistCardMove(cardId, listId, afterId);
 	}
 
 	function handleListConsider(event: CustomEvent<DndEvent<ListWithCards>>) {
@@ -121,7 +109,7 @@
 		}}
 		onconsider={handleListConsider}
 		onfinalize={handleListFinalize}
-		aria-label="Lists"
+		aria-label="Columns"
 	>
 		{#each lists as list (list.id)}
 			<div
@@ -143,12 +131,12 @@
 		<form class="w-72 shrink-0 rounded-xl bg-slate-100 p-2" onsubmit={addList}>
 			<input
 				class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
-				placeholder="+ Add a list"
+				placeholder="+ Add column"
 				maxlength={MAX_NAME_CHARS}
 				bind:value={newListName}
 			/>
 		</form>
 	{:else if lists.length === 0}
-		<p class="text-sm text-slate-500">This board has no lists yet.</p>
+		<p class="text-sm text-slate-500">This board has no columns yet.</p>
 	{/if}
 </div>

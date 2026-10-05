@@ -23,7 +23,7 @@
 	const MAX_NAME_CHARS = 255;
 	const CARD_QUERY_PARAM = 'card';
 
-	type View = 'kanban' | 'list';
+	type View = 'kanban' | 'table';
 
 	let view = $state<View>('kanban');
 	let renaming = $state(false);
@@ -133,7 +133,7 @@
 
 		<div class="ml-auto flex items-center gap-2">
 			<div class="flex rounded-md border border-slate-300 p-0.5 text-sm" role="group" aria-label="View">
-				{#each [['kanban', 'Board'], ['list', 'List']] as [value, label] (value)}
+				{#each [['kanban', 'Board'], ['table', 'Table']] as [value, label] (value)}
 					<button
 						type="button"
 						class="rounded px-3 py-1 {view === value

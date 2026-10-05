@@ -4,7 +4,12 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import DatePicker from '$lib/components/ui/DatePicker.svelte';
 	import { formatDate } from '$lib/format';
-	import { applyCardUpdated, labels, setCardRelations } from '$lib/stores/board.store';
+	import {
+		applyCardUpdated,
+		labels,
+		moveCardToList,
+		setCardRelations
+	} from '$lib/stores/board.store';
 	import { toastError } from '$lib/stores/toast.store';
 	import { members } from '$lib/stores/workspace.store';
 	import type { BoardCard, CardChanges, ListWithCards } from '$lib/types';
@@ -105,6 +110,12 @@
 		if (title && title !== card.title) void update(card, { title });
 	}
 
+	async function changeStatus(card: BoardCard, select: HTMLSelectElement) {
+		if (select.value === card.list_id) return;
+		const moved = await moveCardToList(card.id, select.value);
+		if (!moved) select.value = card.list_id;
+	}
+
 	async function assign(card: BoardCard, userId: string) {
 		if (!userId) return;
 		try {
@@ -145,7 +156,7 @@
 		<thead class="sticky top-0 bg-slate-50">
 			<tr>
 				{@render header('title', 'Title')}
-				{@render header('board', 'List')}
+				{@render header('board', 'Status')}
 				{@render header('assignee', 'Assignees')}
 				{@render header('label', 'Labels')}
 				{@render header('due_date', 'Due')}
@@ -180,7 +191,22 @@
 							>
 						</div>
 					</td>
-					<td class="border-t border-slate-100 px-3 py-2 text-slate-600">{listName}</td>
+					<td class="border-t border-slate-100 px-3 py-2 text-slate-600">
+						{#if canEdit}
+							<select
+								class="rounded border border-slate-200 bg-white px-1 py-0.5 text-sm"
+								aria-label="Status"
+								value={card.list_id}
+								onchange={(e) => changeStatus(card, e.currentTarget)}
+							>
+								{#each lists as list (list.id)}
+									<option value={list.id}>{list.name}</option>
+								{/each}
+							</select>
+						{:else}
+							{listName}
+						{/if}
+					</td>
 					<td class="border-t border-slate-100 px-3 py-2">
 						<div class="flex items-center gap-1">
 							{#each assigned as member (member.user_id)}

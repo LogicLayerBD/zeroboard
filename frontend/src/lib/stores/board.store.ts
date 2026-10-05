@@ -1,5 +1,6 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import * as api from '$lib/api';
+import { previousId } from '$lib/dnd';
 import type { BoardCard, BoardDetails, Card, Label, List, ListWithCards } from '$lib/types';
 import { toastError } from './toast.store';
 
@@ -120,6 +121,36 @@ export function applyCardMoved(cardId: string, toListId: string, position: numbe
 				: { ...l, cards: others };
 		});
 	});
+}
+
+/**
+ * Saves a card move and applies the server's position. If the card does not land
+ * right after `afterId` locally (the server renumbered siblings, or someone else moved
+ * cards meanwhile), the board is re-fetched. Failures are reported and reverted.
+ */
+export async function persistCardMove(
+	cardId: string,
+	listId: string,
+	afterId: string | null
+): Promise<Card | null> {
+	try {
+		const moved = await api.moveCard(cardId, listId, afterId);
+		applyCardMoved(moved.id, moved.list_id, moved.position);
+		const target = get(board)?.lists.find((l) => l.id === moved.list_id);
+		if (!target || previousId(target.cards, moved.id) !== afterId) await reloadBoard();
+		return moved;
+	} catch (err) {
+		toastError(err);
+		await reloadBoard();
+		return null;
+	}
+}
+
+/** Moves the card to the bottom of `listId` (used by the status dropdowns). */
+export function moveCardToList(cardId: string, listId: string): Promise<Card | null> {
+	const target = get(board)?.lists.find((l) => l.id === listId);
+	const others = target?.cards.filter((c) => c.id !== cardId) ?? [];
+	return persistCardMove(cardId, listId, others.at(-1)?.id ?? null);
 }
 
 export function applyListCreated(list: List): void {
