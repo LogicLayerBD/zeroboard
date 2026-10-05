@@ -22,11 +22,12 @@
 
 	interface Props {
 		lists: ListWithCards[];
+		detailed: boolean;
 		canEdit: boolean;
 		onopencard: (cardId: string) => void;
 	}
 
-	let { lists, canEdit, onopencard }: Props = $props();
+	let { lists, detailed, canEdit, onopencard }: Props = $props();
 
 	interface DragOrigin {
 		id: string;
@@ -121,6 +122,7 @@
 				<KanbanList
 					{list}
 					accent={columnAccent(index)}
+					{detailed}
 					{canEdit}
 					{onopencard}
 					ondragstart={onCardDragStart}

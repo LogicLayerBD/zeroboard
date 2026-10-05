@@ -19,6 +19,7 @@
 		removeBoardLocally,
 		upsertBoard
 	} from '$lib/stores/workspace.store';
+	import { cardDensity, setCardDensity } from '$lib/stores/ui.store';
 	import { activeUsers } from '$lib/stores/ws.store';
 	import { joinBoard, leaveBoard, setBoardAccessLostHandler } from '$lib/ws';
 
@@ -168,6 +169,20 @@
 					>
 				{/each}
 			</div>
+			{#if view === 'kanban'}
+				<button
+					type="button"
+					class="btn-ghost btn-sm {$cardDensity === 'detailed'
+						? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'
+						: ''}"
+					aria-pressed={$cardDensity === 'detailed'}
+					title={$cardDensity === 'detailed' ? 'Show compact cards' : 'Show detailed cards'}
+					onclick={() => setCardDensity($cardDensity === 'detailed' ? 'compact' : 'detailed')}
+				>
+					<Icon name={$cardDensity === 'detailed' ? 'collapse' : 'expand'} />
+					<span class="hidden sm:inline">{$cardDensity === 'detailed' ? 'Compact' : 'Detailed'}</span>
+				</button>
+			{/if}
 			{#if isAdmin}
 				<button
 					type="button"
@@ -182,7 +197,12 @@
 
 	<div class="min-h-0 flex-1 bg-gradient-to-br from-slate-100 dark:from-slate-950 via-indigo-50/60 dark:via-slate-950 to-violet-50/60 dark:to-indigo-950/50">
 		{#if view === 'kanban'}
-			<KanbanBoard lists={$board.lists} {canEdit} onopencard={openCard} />
+			<KanbanBoard
+				lists={$board.lists}
+				detailed={$cardDensity === 'detailed'}
+				{canEdit}
+				onopencard={openCard}
+			/>
 		{:else}
 			<ListView lists={$board.lists} {canEdit} onopencard={openCard} />
 		{/if}

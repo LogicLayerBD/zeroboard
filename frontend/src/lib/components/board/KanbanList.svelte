@@ -21,13 +21,14 @@
 		list: ListWithCards;
 		/** Column colour (hex), assigned by position on the board. */
 		accent: string;
+		detailed: boolean;
 		canEdit: boolean;
 		onopencard: (cardId: string) => void;
 		ondragstart: (cardId: string, listId: string) => void;
 		ondrop: (cardId: string, listId: string, cards: BoardCard[]) => void;
 	}
 
-	let { list, accent, canEdit, onopencard, ondragstart, ondrop }: Props = $props();
+	let { list, accent, detailed, canEdit, onopencard, ondragstart, ondrop }: Props = $props();
 
 	let renaming = $state(false);
 	let nameDraft = $state('');
@@ -113,7 +114,7 @@
 </script>
 
 <section
-	class="group/column flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl bg-slate-200/50 dark:bg-slate-900/70 ring-1 ring-slate-900/5 dark:ring-white/10 backdrop-blur-sm"
+	class="group/column flex max-h-full shrink-0 {detailed ? 'w-80 sm:w-96' : 'w-72'} flex-col overflow-hidden rounded-2xl bg-slate-200/50 dark:bg-slate-900/70 ring-1 ring-slate-900/5 dark:ring-white/10 backdrop-blur-sm"
 	aria-label={list.name}
 >
 	<span class="h-1 shrink-0" style:background-color={accent}></span>
@@ -175,7 +176,7 @@
 	>
 		{#each list.cards as card (card.id)}
 			<div animate:flip={{ duration: FLIP_DURATION_MS }} class={isShadowItem(card) ? 'opacity-40' : ''}>
-				<KanbanCard {card} onopen={onopencard} />
+				<KanbanCard {card} {detailed} onopen={onopencard} />
 			</div>
 		{/each}
 	</div>

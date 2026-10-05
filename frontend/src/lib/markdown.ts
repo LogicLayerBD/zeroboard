@@ -23,7 +23,7 @@ function escapeHtml(text: string): string {
 function renderInline(escaped: string): string {
 	const codeSpans: string[] = [];
 	let html = escaped.replace(/`([^`]+)`/g, (_, code: string) => {
-		codeSpans.push(`<code class="rounded bg-slate-100 px-1 text-sm">${code}</code>`);
+		codeSpans.push(`<code class="rounded bg-slate-100 px-1 text-sm dark:bg-slate-800">${code}</code>`);
 		return `\u0000${codeSpans.length - 1}\u0000`;
 	});
 	html = html
@@ -31,11 +31,34 @@ function renderInline(escaped: string): string {
 			// `href` is escaped text; unescape only to test the scheme.
 			const raw = href.replace(/&amp;/g, '&');
 			if (!SAFE_LINK.test(raw)) return match;
-			return `<a href="${href}" target="_blank" rel="noopener noreferrer nofollow" class="text-indigo-600 underline">${label}</a>`;
+			return `<a href="${href}" target="_blank" rel="noopener noreferrer nofollow" class="text-indigo-600 underline dark:text-indigo-400">${label}</a>`;
 		})
 		.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 		.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
 	return html.replace(/\u0000(\d+)\u0000/g, (_, index: string) => codeSpans[Number(index)] ?? '');
+}
+
+/**
+ * Strips Markdown syntax for short previews (e.g. on board cards). The result is
+ * plain text and must be rendered as text, never as HTML.
+ */
+export function markdownToPlainText(source: string): string {
+	return source
+		.replace(/\r\n?/g, '\n')
+		.split('\n')
+		.filter((line) => !line.trimStart().startsWith('```'))
+		.map((line) =>
+			line
+				.replace(/^\s*#{1,6}\s+/, '')
+				.replace(/^\s*(?:[-*]|\d+\.)\s+/, '')
+				.replace(/\[([^\]]+)\]\([^)\s]+\)/g, '$1')
+				.replace(/`([^`]+)`/g, '$1')
+				.replace(/\*\*([^*]+)\*\*/g, '$1')
+				.replace(/(^|[^*])\*([^*]+)\*/g, '$1$2')
+				.trim()
+		)
+		.filter((line) => line !== '')
+		.join('\n');
 }
 
 export function renderMarkdown(source: string): string {
@@ -70,7 +93,7 @@ export function renderMarkdown(source: string): string {
 		if (line.trimStart().startsWith('```')) {
 			if (inCode) {
 				out.push(
-					`<pre class="my-2 overflow-x-auto rounded bg-slate-100 p-2 text-sm"><code>${code.join('\n')}</code></pre>`
+					`<pre class="my-2 overflow-x-auto rounded bg-slate-100 p-2 text-sm dark:bg-slate-800"><code>${code.join('\n')}</code></pre>`
 				);
 				code = [];
 				inCode = false;
@@ -108,7 +131,7 @@ export function renderMarkdown(source: string): string {
 	}
 	if (inCode) {
 		out.push(
-			`<pre class="my-2 overflow-x-auto rounded bg-slate-100 p-2 text-sm"><code>${code.join('\n')}</code></pre>`
+			`<pre class="my-2 overflow-x-auto rounded bg-slate-100 p-2 text-sm dark:bg-slate-800"><code>${code.join('\n')}</code></pre>`
 		);
 	}
 	flushParagraph();
