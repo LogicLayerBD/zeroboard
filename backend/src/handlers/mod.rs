@@ -11,7 +11,7 @@ pub mod time_entries;
 pub mod workspaces;
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 use crate::errors::AppError;
 

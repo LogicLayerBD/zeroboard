@@ -6,6 +6,7 @@ use serde_json::json;
 use super::now_ms;
 use crate::errors::AppError;
 use crate::models::{Card, Notification};
+use crate::ws::events;
 use crate::AppState;
 
 pub const ASSIGNED_TO_CARD: &str = "assigned_to_card";
@@ -174,7 +175,18 @@ async fn create(state: &AppState, user_id: &str, kind: &str, card: &Card, messag
 
     match inserted {
         Ok(_) => {
-            tracing::info!(notification_id = %id, %user_id, %kind, card_id = %card.id, "notification created")
+            tracing::info!(notification_id = %id, %user_id, %kind, card_id = %card.id, "notification created");
+            let notification = Notification {
+                id,
+                user_id: user_id.to_string(),
+                kind: kind.to_string(),
+                payload,
+                read: false,
+                created_at: now,
+            };
+            state
+                .ws_hub
+                .send_to_user(user_id, &events::notification(&notification));
         }
         Err(err) => tracing::error!(
             error = ?err,

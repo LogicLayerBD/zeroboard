@@ -5,6 +5,7 @@ use super::positions::{reposition, slot_after, Sibling, POSITION_STEP};
 use super::{activity, is_foreign_key_violation, is_unique_violation, notifications, now_ms};
 use crate::errors::AppError;
 use crate::models::{Attachment, Card, CardAssignee, CardLabel, Comment, Label, TimeEntry};
+use crate::ws::events;
 use crate::AppState;
 
 const TARGET_LIST_MESSAGE: &str = "list_id must be a list on this board";
@@ -112,6 +113,9 @@ pub async fn create(
         json!({ "list_id": list_id, "title": card.title }),
     )
     .await;
+    state
+        .ws_hub
+        .broadcast_to_board_all(board_id, &events::card_created(&card));
     Ok(card)
 }
 
@@ -221,6 +225,9 @@ pub async fn update(
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%card_id, %actor_id, "card updated");
+    state
+        .ws_hub
+        .broadcast_to_board_all(&card.board_id, &events::card_updated(&card));
     notifications::notify_if_due_soon(state, actor_id, &card).await;
     Ok(card)
 }
@@ -244,15 +251,21 @@ pub async fn delete(state: &AppState, card_id: &str) -> Result<(), AppError> {
     sqlx::query!("DELETE FROM attachments WHERE card_id = $1", card_id)
         .execute(&mut *tx)
         .await?;
-    let deleted = sqlx::query!("DELETE FROM cards WHERE id = $1", card_id)
-        .execute(&mut *tx)
-        .await?;
-    if deleted.rows_affected() == 0 {
-        return Err(AppError::NotFound);
-    }
+    let deleted = sqlx::query!(
+        r#"DELETE FROM cards WHERE id = $1
+           RETURNING list_id AS "list_id!", board_id AS "board_id!""#,
+        card_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AppError::NotFound)?;
     tx.commit().await?;
 
     tracing::info!(%card_id, "card deleted");
+    state.ws_hub.broadcast_to_board_all(
+        &deleted.board_id,
+        &events::card_deleted(card_id, &deleted.list_id),
+    );
     remove_attachment_files(state, card_id).await;
     Ok(())
 }
@@ -336,6 +349,10 @@ pub async fn move_card(
         position = moved.position,
         rebalanced = !plan.rebalanced.is_empty(),
         "card moved"
+    );
+    state.ws_hub.broadcast_to_board_all(
+        &moved.board_id,
+        &events::card_moved(&moved.id, &card.list_id, &moved.list_id, moved.position),
     );
     activity::record(
         state,

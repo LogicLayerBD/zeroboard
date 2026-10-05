@@ -5,6 +5,7 @@ mod errors;
 mod handlers;
 mod models;
 mod services;
+mod ws;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -25,6 +26,7 @@ use crate::auth::rate_limit::{
 };
 use crate::config::Config;
 use crate::errors::AppError;
+use crate::ws::WsHub;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_LOG_FILTER: &str = "zeroboard=info,tower_http=info";
@@ -38,6 +40,8 @@ pub struct AppState {
     pub config: Config,
     pub login_limiter: Arc<RateLimiter>,
     pub register_limiter: Arc<RateLimiter>,
+    /// WebSocket connection manager.
+    pub ws_hub: Arc<WsHub>,
     /// Process start, for uptime reporting.
     pub started_at: Instant,
 }
@@ -50,6 +54,7 @@ impl AppState {
             config,
             login_limiter: Arc::new(RateLimiter::new(LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW)),
             register_limiter: Arc::new(RateLimiter::new(REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW)),
+            ws_hub: Arc::new(WsHub::new()),
             started_at: Instant::now(),
         }
     }
@@ -120,6 +125,7 @@ fn router(state: AppState) -> Router {
         .merge(handlers::comments::router(&state))
         .merge(handlers::notifications::router(&state))
         .merge(handlers::admin::router(&state))
+        .merge(ws::router())
         .fallback(|| async { AppError::NotFound })
         .with_state(state)
         .layer(

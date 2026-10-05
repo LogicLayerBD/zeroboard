@@ -3,6 +3,7 @@ use serde::Serialize;
 use super::{is_foreign_key_violation, is_unique_violation, now_ms};
 use crate::errors::AppError;
 use crate::models::{Workspace, WorkspaceRole};
+use crate::ws::events;
 use crate::AppState;
 
 const USER_NOT_FOUND_MESSAGE: &str = "no user is registered with that email";
@@ -156,7 +157,13 @@ pub async fn invite(
     }
 
     tracing::info!(%workspace_id, user_id = %user.id, ?role, "workspace member added");
-    member(state, workspace_id, &user.id).await
+    let member = member(state, workspace_id, &user.id).await?;
+    for board_id in live_board_ids(state, workspace_id).await {
+        state
+            .ws_hub
+            .broadcast_to_board_all(&board_id, &events::member_joined(&member, &board_id));
+    }
+    Ok(member)
 }
 
 /// Refuses to remove the workspace's only admin.
@@ -190,7 +197,35 @@ pub async fn remove_member(
         .await);
     }
     tracing::info!(%workspace_id, %user_id, "workspace member removed");
+    for board_id in live_board_ids(state, workspace_id).await {
+        // Detach first so the removed user stops receiving this board's events.
+        state.ws_hub.remove_user_from_board(user_id, &board_id);
+        state
+            .ws_hub
+            .broadcast_to_board_all(&board_id, &events::member_left(user_id, &board_id));
+    }
     Ok(())
+}
+
+/// Boards whose members get real-time events. Best-effort: a failed lookup is
+/// logged and yields no boards, so it never fails the membership change.
+async fn live_board_ids(state: &AppState, workspace_id: &str) -> Vec<String> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!" FROM boards
+           WHERE workspace_id = $1 AND archived = 0
+           ORDER BY id"#,
+        workspace_id
+    )
+    .fetch_all(&state.read_db)
+    .await;
+
+    match rows {
+        Ok(rows) => rows.into_iter().map(|row| row.id).collect(),
+        Err(err) => {
+            tracing::error!(error = ?err, %workspace_id, "failed to load boards for ws broadcast");
+            Vec::new()
+        }
+    }
 }
 
 /// Refuses to demote the workspace's only admin.

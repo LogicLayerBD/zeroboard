@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-axum = { version = "0.7", features = ["multipart"] }
+axum = { version = "0.7", features = ["multipart", "ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "uuid"] }
 rust-embed = "8"
@@ -26,9 +26,11 @@ rand = "0.8"
 dashmap = "5"
 infer = "0.16"
 tokio-util = { version = "0.7", features = ["io"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
+futures-util = "0.3"
 
 [profile.release]
 lto = true

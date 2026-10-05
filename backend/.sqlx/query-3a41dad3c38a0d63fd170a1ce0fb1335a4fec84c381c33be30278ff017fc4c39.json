@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM cards WHERE id = $1\n           RETURNING list_id AS \"list_id!\", board_id AS \"board_id!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "list_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "board_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3a41dad3c38a0d63fd170a1ce0fb1335a4fec84c381c33be30278ff017fc4c39"
+}

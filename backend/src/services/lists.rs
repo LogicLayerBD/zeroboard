@@ -2,6 +2,7 @@ use super::positions::{reposition, slot_after, Sibling, POSITION_STEP};
 use super::{cards, is_foreign_key_violation, now_ms};
 use crate::errors::AppError;
 use crate::models::List;
+use crate::ws::events;
 use crate::AppState;
 
 const AFTER_ID_MESSAGE: &str = "after_id must be another list on this board";
@@ -48,6 +49,9 @@ pub async fn create(state: &AppState, board_id: &str, name: &str) -> Result<List
         Err(err) => return Err(err.into()),
     };
     tracing::info!(list_id = %list.id, %board_id, "list created");
+    state
+        .ws_hub
+        .broadcast_to_board_all(board_id, &events::list_created(&list));
     Ok(list)
 }
 
@@ -69,6 +73,9 @@ pub async fn rename(state: &AppState, list_id: &str, name: &str) -> Result<List,
     .ok_or(AppError::NotFound)?;
 
     tracing::info!(%list_id, "list renamed");
+    state
+        .ws_hub
+        .broadcast_to_board_all(&list.board_id, &events::list_updated(&list));
     Ok(list)
 }
 
@@ -82,15 +89,19 @@ pub async fn delete(state: &AppState, list_id: &str) -> Result<(), AppError> {
     )
     .fetch_all(&mut *tx)
     .await?;
-    let deleted = sqlx::query!("DELETE FROM lists WHERE id = $1", list_id)
-        .execute(&mut *tx)
-        .await?;
-    if deleted.rows_affected() == 0 {
-        return Err(AppError::NotFound);
-    }
+    let deleted = sqlx::query!(
+        r#"DELETE FROM lists WHERE id = $1 RETURNING board_id AS "board_id!""#,
+        list_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(AppError::NotFound)?;
     tx.commit().await?;
 
     tracing::info!(%list_id, cards = card_ids.len(), "list deleted");
+    state
+        .ws_hub
+        .broadcast_to_board_all(&deleted.board_id, &events::list_deleted(list_id));
     for row in card_ids {
         cards::remove_attachment_files(state, &row.id).await;
     }
@@ -146,6 +157,10 @@ pub async fn reorder(
         position = moved.position,
         rebalanced = !plan.rebalanced.is_empty(),
         "list reordered"
+    );
+    state.ws_hub.broadcast_to_board_all(
+        &moved.board_id,
+        &events::list_reordered(&moved.id, moved.position),
     );
     Ok(moved)
 }

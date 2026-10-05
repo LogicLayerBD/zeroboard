@@ -6,6 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::Context;
 use axum::extract::multipart::{Field, MultipartError};
 use axum::http::StatusCode;
+use image::codecs::jpeg::JpegEncoder;
+use image::{DynamicImage, ImageDecoder, ImageReader, Limits};
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -39,6 +41,16 @@ const BYTES_PER_MB: u64 = 1024 * 1024;
 /// Leaves room for the `{uuid}_` prefix within the common 255-byte filename limit.
 const MAX_FILENAME_BYTES: usize = 200;
 const FALLBACK_FILENAME: &str = "file";
+
+/// Types that can carry EXIF and are re-encoded on upload. TIFF is not in
+/// `ALLOWED_MIME_TYPES` and needs the `image` crate's `tiff` feature to decode.
+const EXIF_MIME_TYPES: &[&str] = &["image/jpeg", "image/tiff"];
+/// High enough to be visually lossless for photos.
+const JPEG_REENCODE_QUALITY: u8 = 90;
+/// Caps decoder allocations (~5000x4000 RGB fits) to protect the RAM budget;
+/// larger images fail to decode and are kept as uploaded.
+const MAX_IMAGE_DECODE_BYTES: u64 = 64 * 1024 * 1024;
+const EXIF_TEMP_SUFFIX: &str = ".exif-tmp";
 
 const EMPTY_FILE_MESSAGE: &str = "file is empty";
 const TYPE_NOT_ALLOWED_MESSAGE: &str = "file type is not allowed";
@@ -238,14 +250,21 @@ async fn store(
         .await
         .context("failed to flush attachment file")?;
 
+    drop(file);
+
     if size == 0 {
         return Err(AppError::BadRequest(EMPTY_FILE_MESSAGE.to_string()));
     }
     let truncated = size > head.len() as u64;
-    if detect_mime(&head, filename, truncated).is_none() {
+    let Some(mime) = detect_mime(&head, filename, truncated) else {
         tracing::info!(card_id = %card.id, %user_id, "attachment rejected: type not allowed");
         return Err(AppError::BadRequest(TYPE_NOT_ALLOWED_MESSAGE.to_string()));
-    }
+    };
+    let size = if EXIF_MIME_TYPES.contains(&mime) {
+        strip_exif(path, id).await.unwrap_or(size)
+    } else {
+        size
+    };
 
     let size_bytes = i64::try_from(size).context("attachment size overflows i64")?;
     let now = now_ms();
@@ -274,6 +293,73 @@ async fn store(
         Err(err) if is_foreign_key_violation(&err) => Err(AppError::NotFound),
         Err(err) => Err(err.into()),
     }
+}
+
+/// Re-encodes the image at `path` as a fresh JPEG, which drops EXIF (GPS, camera
+/// serials, ...). Returns the new size, or `None` (original kept) on any failure.
+async fn strip_exif(path: &Path, attachment_id: &str) -> Option<u64> {
+    let source = path.to_path_buf();
+    let reencoded = tokio::task::spawn_blocking(move || reencode_jpeg(&source)).await;
+    let bytes = match reencoded {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(err)) => {
+            tracing::error!(error = ?err, %attachment_id, "exif strip failed, keeping original");
+            return None;
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, %attachment_id, "exif strip task failed, keeping original");
+            return None;
+        }
+    };
+
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(EXIF_TEMP_SUFFIX);
+    let temp_path = PathBuf::from(temp_name);
+    let replaced = async {
+        tokio::fs::write(&temp_path, &bytes).await?;
+        tokio::fs::rename(&temp_path, path).await
+    }
+    .await;
+    if let Err(err) = replaced {
+        tracing::error!(error = ?err, %attachment_id, "failed to replace image with exif-stripped copy, keeping original");
+        remove_file(&temp_path, attachment_id).await;
+        return None;
+    }
+
+    tracing::info!(%attachment_id, size_bytes = bytes.len(), "exif stripped from image attachment");
+    Some(bytes.len() as u64)
+}
+
+/// CPU-heavy: call from `spawn_blocking`.
+fn reencode_jpeg(path: &Path) -> anyhow::Result<Vec<u8>> {
+    let mut reader = ImageReader::open(path)
+        .context("failed to open image")?
+        .with_guessed_format()
+        .context("failed to read image header")?;
+    let mut limits = Limits::default();
+    limits.max_alloc = Some(MAX_IMAGE_DECODE_BYTES);
+    reader.limits(limits);
+
+    let mut decoder = reader.into_decoder().context("unsupported image")?;
+    // EXIF orientation is lost with the metadata, so bake it into the pixels.
+    let orientation = decoder
+        .orientation()
+        .context("failed to read orientation")?;
+    let mut image = DynamicImage::from_decoder(decoder).context("failed to decode image")?;
+    image.apply_orientation(orientation);
+    let image = match image {
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_) => image,
+        other => DynamicImage::ImageRgb8(other.to_rgb8()),
+    };
+
+    let mut bytes = Vec::new();
+    image
+        .write_with_encoder(JpegEncoder::new_with_quality(
+            &mut bytes,
+            JPEG_REENCODE_QUALITY,
+        ))
+        .context("failed to encode jpeg")?;
+    Ok(bytes)
 }
 
 /// Opens the file and re-detects its type from content for the response headers.
@@ -448,6 +534,78 @@ mod tests {
         let head = [b"ok ".as_slice(), cut].concat();
         assert_eq!(detect_mime(&head, "a.txt", true), Some(TEXT_PLAIN));
         assert_eq!(detect_mime(&head, "a.txt", false), None);
+    }
+
+    const EXIF_MARKER: &[u8] = b"SECRET-GPS-49.0N-2.3E";
+
+    /// A 4x2 JPEG with an APP1 EXIF segment (minimal TIFF header + marker bytes).
+    fn jpeg_with_exif() -> Vec<u8> {
+        let image =
+            DynamicImage::ImageRgb8(image::RgbImage::from_pixel(4, 2, image::Rgb([200, 10, 10])));
+        let mut plain = Vec::new();
+        image
+            .write_with_encoder(JpegEncoder::new_with_quality(
+                &mut plain,
+                JPEG_REENCODE_QUALITY,
+            ))
+            .unwrap();
+
+        let tiff_header: &[u8] = b"II*\0\x08\0\0\0\0\0\0\0\0\0";
+        let body = [b"Exif\0\0".as_slice(), tiff_header, EXIF_MARKER].concat();
+        let length = u16::try_from(body.len() + 2).unwrap().to_be_bytes();
+        let soi = &plain[..2];
+        [soi, &[0xFF, 0xE1], &length, &body, &plain[2..]].concat()
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+    }
+
+    async fn temp_file(contents: &[u8]) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("zeroboard-exif-{}.jpg", uuid::Uuid::new_v4()));
+        tokio::fs::write(&path, contents).await.unwrap();
+        path
+    }
+
+    #[tokio::test]
+    async fn strip_exif_reencodes_jpeg_without_metadata() {
+        let original = jpeg_with_exif();
+        assert!(contains(&original, EXIF_MARKER));
+        assert_eq!(
+            detect_mime(&original, "photo.jpg", false),
+            Some("image/jpeg")
+        );
+        let path = temp_file(&original).await;
+
+        let new_size = strip_exif(&path, "a1").await.expect("strip should succeed");
+
+        let stripped = tokio::fs::read(&path).await.unwrap();
+        assert_eq!(new_size, stripped.len() as u64);
+        assert!(!contains(&stripped, b"Exif"));
+        assert!(!contains(&stripped, EXIF_MARKER));
+        let decoded = image::load_from_memory(&stripped).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (4, 2));
+        let mut temp_name = path.as_os_str().to_owned();
+        temp_name.push(EXIF_TEMP_SUFFIX);
+        assert!(!PathBuf::from(temp_name).exists());
+        tokio::fs::remove_file(&path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn strip_exif_keeps_original_when_decoding_fails() {
+        let corrupt = b"\xFF\xD8\xFF\xE0 not really a jpeg".to_vec();
+        assert_eq!(
+            detect_mime(&corrupt, "photo.jpg", false),
+            Some("image/jpeg")
+        );
+        let path = temp_file(&corrupt).await;
+
+        assert_eq!(strip_exif(&path, "a1").await, None);
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), corrupt);
+        tokio::fs::remove_file(&path).await.unwrap();
     }
 
     #[test]
