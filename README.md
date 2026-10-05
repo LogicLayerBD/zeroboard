@@ -16,7 +16,7 @@ ZeroBoard runs as **one binary** on a **$5/mo VPS** and uses less than **80MB of
 
 ```bash
 # Download the latest binary
-curl -L https://github.com/yourusername/zeroboard/releases/latest/download/zeroboard-linux-x86_64 -o zeroboard
+curl -L https://github.com/LogicLayerBD/zeroboard/releases/latest/download/zeroboard-linux-x86_64 -o zeroboard
 chmod +x zeroboard
 
 # Configure
@@ -31,6 +31,8 @@ Open `http://localhost:3000` — the first user to register becomes admin.
 
 ---
 
+
+
 ## Features (v1)
 
 - **Kanban view** — drag-and-drop cards between lists, real-time synced
@@ -43,31 +45,47 @@ Open `http://localhost:3000` — the first user to register becomes admin.
 
 ---
 
+
+
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend | Rust + Axum + Tokio |
-| Frontend | Svelte 5 + Tailwind CSS |
-| Database | SQLite (WAL mode) |
-| Real-time | WebSockets |
+
+| Layer      | Technology                        |
+| ---------- | --------------------------------- |
+| Backend    | Rust + Axum + Tokio               |
+| Frontend   | Svelte 5 + Tailwind CSS           |
+| Database   | SQLite (WAL mode)                 |
+| Real-time  | WebSockets                        |
 | Deployment | Single binary (frontend embedded) |
+
 
 ---
 
+
+
 ## Self-Hosting
 
+
+
 ### Requirements
+
 - Linux x86_64 (Ubuntu 20.04+ recommended)
 - 512MB RAM minimum
 - 1GB disk space (for attachments)
 
+
+
 ### Environment Variables
+
 See `.env.example` for all options. Required:
+
 - `JWT_SECRET` — long random string (generate with `openssl rand -hex 32`)
 - `DATABASE_URL` — defaults to `sqlite://data/zeroboard.db`
 
+
+
 ### Reverse Proxy (Nginx)
+
 ```nginx
 server {
     listen 443 ssl;
@@ -83,7 +101,10 @@ server {
 }
 ```
 
+
+
 ### Systemd Service
+
 ```ini
 [Unit]
 Description=ZeroBoard
@@ -103,6 +124,8 @@ WantedBy=multi-user.target
 
 ---
 
+
+
 ## Building from Source
 
 ```bash
@@ -115,6 +138,8 @@ make release
 
 ---
 
+
+
 ## License
 
-MIT © [Your Name]
+MIT © [LogicLayer]
