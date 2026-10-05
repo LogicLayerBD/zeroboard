@@ -1,0 +1,114 @@
+---
+description: Security rules — auth, input validation, file handling. Read before any auth or input-handling code.
+globs: ["backend/src/auth/**", "backend/src/handlers/**"]
+alwaysApply: false
+---
+
+# Security Rules
+
+## Authentication Flow
+
+### JWT Strategy
+- **Access token**: short-lived (15 min), sent as `Authorization: Bearer <token>` header
+- **Refresh token**: long-lived (30 days), stored in `httpOnly; Secure; SameSite=Strict` cookie only
+- **Never** store access token in localStorage — keep it in memory (JS variable in the Svelte store)
+- On page refresh: call `POST /api/auth/refresh` with the cookie to get a new access token
+
+### JWT Payload
+```rust
+#[derive(Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String,     // user_id
+    pub email: String,
+    pub exp: usize,      // expiry timestamp
+    pub iat: usize,      // issued at
+}
+```
+
+### Refresh Token
+- Store only a bcrypt hash of the refresh token in DB (not the token itself)
+- On use: verify hash, issue new access token, rotate refresh token (issue new one, invalidate old)
+- On logout: delete refresh token from DB
+
+## Authorization Checks
+Every handler that accesses a resource must verify:
+
+1. **User is authenticated** (JWT middleware handles this)
+2. **User is a member of the workspace** that owns the resource
+3. **User has the right role** for the action:
+   - `viewer`: read only — cannot create/edit/delete anything
+   - `member`: read + create + edit own items + delete own items
+   - `admin`: full access including invite/remove members, delete board
+
+```rust
+// Pattern for every handler:
+async fn update_card(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    Path(card_id): Path<String>,
+    Json(body): Json<UpdateCardRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // 1. Fetch card to get board_id
+    // 2. Fetch board to get workspace_id
+    // 3. Check auth_user is member of that workspace with sufficient role
+    // 4. Then proceed
+}
+```
+
+## Input Validation Rules
+- Validate all request bodies before any DB operation
+- Max lengths:
+  - Names (workspace, board, list): 255 chars
+  - Card title: 500 chars
+  - Card description: 50,000 chars
+  - Comment body: 10,000 chars
+  - Label name: 100 chars
+- Reject empty strings where a value is required
+- Sanitize filenames for attachments (strip path separators, null bytes)
+- Validate UUIDs format before using in queries
+
+## File Upload Security
+```rust
+const ALLOWED_MIME_TYPES: &[&str] = &[
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "application/pdf",
+    "text/plain", "text/csv",
+    "application/zip",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+```
+- Verify MIME type from file content (magic bytes), not just the Content-Type header
+- Strip EXIF data from images before storing (use `image` crate)
+- Store files outside the web root — never serve from a path the user can guess
+- Attachment download URL: `GET /api/attachments/:id/download` (checks auth, then streams file)
+- Never redirect to a file:// or local path
+
+## HTTP Security Headers
+Add via tower-http middleware:
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
+```
+
+## CORS
+In development: allow `localhost:5173`
+In production: allow only the configured `APP_URL` domain
+Never use wildcard `*` in production CORS.
+
+## Rate Limiting
+Implement simple in-memory rate limiting for auth endpoints:
+- `POST /api/auth/login`: max 10 attempts per IP per 15 minutes
+- `POST /api/auth/register`: max 5 attempts per IP per hour
+- Use a `DashMap<IpAddr, (u32, Instant)>` in AppState
+
+## What Never to Do
+- Never log passwords, tokens, or full request bodies
+- Never return stack traces or internal error details to the client
+- Never trust the `X-Forwarded-For` header without configuring a trusted proxy
+- Never use MD5 or SHA1 for password hashing — only bcrypt (cost ≥ 12)
+- Never store secrets in code — always from environment variables
+- Never use `unwrap()` in handler code — always use `?` with proper error mapping

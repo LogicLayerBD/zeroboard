@@ -1,0 +1,129 @@
+---
+description: Rules for all Rust backend code in backend/src/
+globs: ["backend/**/*.rs", "backend/Cargo.toml"]
+alwaysApply: false
+---
+
+# Backend — Rust Rules
+
+## Crate Versions (pin these, do not upgrade without reason)
+```toml
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "uuid"] }
+rust-embed = "8"
+tokio-tungstenite = "0.21"
+jsonwebtoken = "9"
+bcrypt = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "1"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dotenvy = "0.15"
+```
+
+## Project Structure Rules
+
+### handlers/
+- One file per resource (auth.rs, cards.rs, etc.)
+- Each handler function is async and takes `State<AppState>` + extractors
+- Handlers never contain business logic — they extract, call a service fn, return response
+- Always return `Result<impl IntoResponse, AppError>`
+
+### models/
+- One struct per DB table
+- Derive: `Debug, Clone, Serialize, Deserialize, sqlx::FromRow`
+- Use `String` for UUIDs (SQLite stores as TEXT)
+- Use `i64` for timestamps (Unix epoch milliseconds)
+
+### errors.rs
+- Single `AppError` enum implementing `IntoResponse`
+- Variants: `NotFound`, `Unauthorized`, `Forbidden`, `BadRequest(String)`, `Internal(anyhow::Error)`
+- Always map sqlx errors to AppError, never expose raw DB errors to client
+
+## Coding Rules
+
+### IDs
+Always generate UUIDs with:
+```rust
+uuid::Uuid::new_v4().to_string()
+```
+
+### Timestamps
+Always store as Unix milliseconds:
+```rust
+chrono::Utc::now().timestamp_millis()
+```
+
+### Passwords
+Always hash with bcrypt cost 12:
+```rust
+bcrypt::hash(password, 12)?
+bcrypt::verify(password, &hash)?
+```
+
+### SQL Queries
+- Always use `sqlx::query!` or `sqlx::query_as!` macros (compile-time checked)
+- Never use string formatting to build SQL
+- Always use named parameters: `WHERE id = $1`
+- For list queries, always add `ORDER BY` — never rely on SQLite's natural order
+
+### Fractional Indexing for Positions
+When inserting a card/list at a position, use midpoint between neighbors:
+```rust
+// between a and b: new_pos = (a + b) / 2.0
+// at start: new_pos = first_item.position / 2.0
+// at end: new_pos = last_item.position + 1000.0
+// initial positions: 1000.0, 2000.0, 3000.0 ...
+```
+
+### AppState
+```rust
+#[derive(Clone)]
+pub struct AppState {
+    pub db: sqlx::SqlitePool,
+    pub config: Config,
+    pub ws_hub: Arc<WsHub>,  // WebSocket connection manager
+}
+```
+
+### Input Validation
+- Always validate request bodies before touching the DB
+- Return `AppError::BadRequest("reason")` for invalid input
+- Never trust client-provided IDs without verifying ownership in DB
+
+### Auth Middleware
+- All routes except `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh` require JWT
+- Extract user from JWT in middleware, inject as `Extension<AuthUser>`
+- Always verify the user has permission to access the resource (check workspace membership)
+
+### File Attachments
+- Store files at: `{ATTACHMENTS_DIR}/{card_id}/{uuid}_{original_filename}`
+- Validate: max size from config, allowed MIME types (images, pdf, text, zip, common office formats)
+- On card delete: delete all attachment files from disk
+- Never serve files directly from the attachments dir path — always through the download handler
+
+### Logging
+Use `tracing` for all logging:
+```rust
+tracing::info!("card created: {}", card_id);
+tracing::error!("db error: {:?}", err);
+```
+Never use `println!` in production code.
+
+## build.rs Requirements
+The `build.rs` file must:
+1. Run `npm run build` in the `../frontend` directory
+2. Only rebuild if frontend source files changed
+3. Copy frontend `dist/` output to `assets/` directory that rust-embed reads
+
+## Binary Release
+The release binary must:
+- Be built with `--release` flag
+- Have LTO enabled in Cargo.toml `[profile.release]`
+- Strip debug symbols: `strip = true` in profile

@@ -1,0 +1,177 @@
+---
+description: Rules for all Svelte/TypeScript frontend code in frontend/src/
+globs: ["frontend/**/*.svelte", "frontend/**/*.ts", "frontend/package.json"]
+alwaysApply: false
+---
+
+# Frontend — Svelte 5 Rules
+
+## Package Versions (pin these)
+```json
+{
+  "svelte": "^5.0.0",
+  "@sveltejs/kit": "^2.0.0",
+  "@sveltejs/adapter-static": "^3.0.0",
+  "vite": "^5.0.0",
+  "typescript": "^5.0.0",
+  "tailwindcss": "^3.4.0",
+  "autoprefixer": "^10.4.0",
+  "@dnd-kit/core": "^6.0.0"
+}
+```
+
+## Build Output
+- Must compile to pure static files (HTML + CSS + JS)
+- Use `@sveltejs/adapter-static` — no SSR, no Node.js server
+- Output directory: `frontend/dist/` (copied to `backend/assets/` by build.rs)
+- All API calls go to relative URLs (`/api/...`) — no hardcoded host
+
+## Svelte 5 Rules
+- Use **runes** syntax (`$state`, `$derived`, `$effect`, `$props`) — not the old Options API
+- Use `$state()` for reactive local state
+- Use `$derived()` for computed values, never recompute in templates
+- Use `$effect()` sparingly — only for side effects that can't be derived
+
+```svelte
+<!-- CORRECT — Svelte 5 runes -->
+<script lang="ts">
+  let count = $state(0);
+  let doubled = $derived(count * 2);
+</script>
+
+<!-- WRONG — Svelte 4 syntax, do not use -->
+<script>
+  export let count = 0;
+  $: doubled = count * 2;
+</script>
+```
+
+## State Management
+Use Svelte stores in `src/lib/stores/`:
+- `auth.store.ts` — current user, token state
+- `board.store.ts` — active board, lists, cards
+- `ws.store.ts` — WebSocket connection state
+- `notifications.store.ts` — notification list + unread count
+
+Keep stores minimal. Derive what you can. Don't store the same data twice.
+
+## API Layer (`src/lib/api.ts`)
+- Single file exporting typed async functions for every API endpoint
+- Always use `fetch` with credentials: 'include' (for httpOnly refresh token cookie)
+- On 401 response: attempt token refresh, retry once, then redirect to login
+- Every API function returns typed data or throws a typed error
+
+```typescript
+// Pattern to follow:
+export async function getBoard(boardId: string): Promise<Board> {
+  const res = await apiFetch(`/api/boards/${boardId}`);
+  if (!res.ok) throw new ApiError(res.status, await res.json());
+  return res.json();
+}
+```
+
+## WebSocket (`src/lib/ws.ts`)
+- Single WebSocket connection per app session
+- Auto-reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s)
+- On reconnect: re-fetch board state to catch any missed events
+- Dispatch incoming events to the relevant store
+
+```typescript
+// Event handler pattern:
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  switch (msg.type) {
+    case 'CARD_MOVED': boardStore.applyCardMove(msg.payload); break;
+    case 'CARD_UPDATED': boardStore.applyCardUpdate(msg.payload); break;
+    // ...
+  }
+};
+```
+
+## Drag and Drop
+- Use `@dnd-kit/core` for drag and drop
+- Cards must be draggable between lists and within a list
+- Lists must be reorderable horizontally
+- On drag end: optimistically update local state, then send API call
+- On API failure: revert to previous state and show error toast
+
+## Component Rules
+- One component per file
+- Components go in `src/lib/components/`
+- Name files with PascalCase: `CardModal.svelte`, `KanbanBoard.svelte`
+- Props must be typed with TypeScript interfaces
+- No inline styles — use Tailwind utility classes only
+
+## Tailwind Rules
+- Use Tailwind CSS v3 only
+- No custom CSS files except `app.css` for base/reset styles
+- Avoid arbitrary values `[...]` unless absolutely necessary
+- Color palette: stick to `slate`, `indigo`, `emerald`, `red`, `amber` for consistency
+
+## Key Components to Build
+```
+components/
+├── layout/
+│   ├── Navbar.svelte          ← top bar with workspace switcher + notifications
+│   └── Sidebar.svelte         ← board list for current workspace
+├── board/
+│   ├── KanbanBoard.svelte     ← drag-drop lists container
+│   ├── KanbanList.svelte      ← single column with cards
+│   ├── KanbanCard.svelte      ← card preview (title, avatar, due date, labels)
+│   └── ListView.svelte        ← table view of all cards on a board
+├── card/
+│   ├── CardModal.svelte       ← full card detail overlay
+│   ├── CardDescription.svelte ← markdown editor/viewer
+│   ├── CardAttachments.svelte ← upload + list attachments
+│   ├── CardTimeTracking.svelte← log + show time entries
+│   └── CardActivity.svelte    ← comments + activity log
+├── ui/
+│   ├── Avatar.svelte          ← colored initial avatar
+│   ├── Badge.svelte           ← label color chip
+│   ├── DatePicker.svelte      ← due date selector
+│   ├── Toast.svelte           ← success/error notifications
+│   └── Modal.svelte           ← generic modal wrapper
+└── notifications/
+    └── NotificationBell.svelte
+```
+
+## Routing (SvelteKit)
+```
+routes/
+├── +layout.svelte             ← auth guard, navbar, ws connection
+├── login/+page.svelte
+├── register/+page.svelte
+└── [workspaceId]/
+    ├── +layout.svelte         ← load workspace, sidebar
+    └── [boardId]/
+        └── +page.svelte       ← board view (kanban or list toggle)
+```
+
+## TypeScript
+- Strict mode enabled
+- Define all types in `src/lib/types.ts`
+- No `any` types — use `unknown` and narrow if needed
+- Mirror backend model types exactly
+
+```typescript
+// src/lib/types.ts — key types
+export interface Card {
+  id: string;
+  listId: string;
+  boardId: string;
+  title: string;
+  description: string | null;
+  position: number;
+  dueDate: number | null;  // Unix ms
+  assignees: User[];
+  labels: Label[];
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+## Error Handling
+- Every API call wrapped in try/catch
+- Show user-facing errors as toast notifications, not console.error
+- Never show raw error messages from server to users
+- Loading states: always show skeleton or spinner while fetching

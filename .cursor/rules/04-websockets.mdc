@@ -1,0 +1,119 @@
+---
+description: Rules for WebSocket implementation — server hub and client connection
+globs: ["backend/src/ws/**", "frontend/src/lib/ws.ts"]
+alwaysApply: false
+---
+
+# WebSocket Rules
+
+## Architecture Overview
+```
+Client Browser
+    │
+    │  WS /ws?token=<jwt>
+    ▼
+WsHub (Arc<Mutex<HashMap<BoardId, Vec<WsClient>>>>)
+    │
+    ├── Authenticates JWT on connect
+    ├── Tracks which board each client has joined
+    └── Broadcasts events to all clients on the same board
+```
+
+## Server — WsHub (`backend/src/ws/mod.rs`)
+
+### Hub Structure
+```rust
+pub struct WsClient {
+    pub user_id: String,
+    pub board_id: Option<String>,
+    pub sender: mpsc::UnboundedSender<Message>,
+}
+
+pub struct WsHub {
+    clients: Mutex<HashMap<String, WsClient>>,  // client_id -> WsClient
+}
+```
+
+### On Connect
+1. Extract JWT from query param `?token=<jwt>`
+2. Reject with 401 if invalid or expired
+3. Register client in hub with no board yet
+4. Start read loop (for JOIN_BOARD / LEAVE_BOARD events)
+5. On disconnect: remove client, broadcast MEMBER_LEFT to their board
+
+### Broadcast Rules
+```rust
+impl WsHub {
+    // Send event to all clients on a board EXCEPT the sender
+    pub fn broadcast_to_board(&self, board_id: &str, event: &WsEvent, exclude_client: Option<&str>)
+
+    // Send event to a specific user (all their connections)
+    pub fn send_to_user(&self, user_id: &str, event: &WsEvent)
+
+    // Send to all clients on a board INCLUDING sender
+    pub fn broadcast_to_board_all(&self, board_id: &str, event: &WsEvent)
+}
+```
+
+### When to Broadcast
+Every API handler that mutates board state must broadcast the corresponding WS event:
+- `POST /api/lists/:boardId/cards` → broadcast `CARD_CREATED` to board
+- `PATCH /api/cards/:id` → broadcast `CARD_UPDATED` to board
+- `PATCH /api/cards/:id/move` → broadcast `CARD_MOVED` to board
+- `DELETE /api/cards/:id` → broadcast `CARD_DELETED` to board
+- `POST /api/boards/:boardId/lists` → broadcast `LIST_CREATED` to board
+- `PATCH /api/lists/:id/position` → broadcast `LIST_REORDERED` to board
+- `POST /api/notifications` → send `NOTIFICATION` to specific user
+
+The API handler receives `State<AppState>` which includes `ws_hub` — use it directly.
+
+## Event Format
+All events serialized as JSON:
+```rust
+#[derive(Serialize)]
+pub struct WsEvent {
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub payload: serde_json::Value,
+}
+```
+
+## Client — ws.ts
+
+### Connection
+```typescript
+const WS_URL = `ws://${window.location.host}/ws?token=${getAccessToken()}`;
+```
+- Connect once on app load after login
+- Store connection in a Svelte store so components can check status
+
+### Reconnection
+```typescript
+const BACKOFF = [1000, 2000, 4000, 8000, 16000, 30000]; // ms
+```
+- On close: wait backoff[attempt] ms, reconnect
+- On reconnect: re-fetch the current board's full state (don't trust cache)
+- Reset backoff to 0 on successful open
+
+### Token Refresh
+- WS token is the short-lived JWT
+- When JWT expires, WS connection will get a 401 close code
+- On 401 close: refresh token, get new JWT, reconnect with new token
+
+### Optimistic Updates
+For drag-and-drop operations:
+1. Update local store immediately (optimistic)
+2. Send REST API call
+3. If API succeeds: WS broadcast will come back (ignore it if state already matches)
+4. If API fails: revert local store to previous state, show error toast
+
+### Never Send Sensitive Data Over WS
+- No passwords, tokens, or attachment content over WS
+- WS is for state change notifications only
+- Clients fetch full data via REST after receiving WS event if needed
+
+## Heartbeat
+- Server sends `{"type": "PING"}` every 30 seconds
+- Client responds with `{"type": "PONG"}`
+- If no PONG in 10s, server closes the connection
+- Client detects close and reconnects

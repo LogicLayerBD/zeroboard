@@ -1,0 +1,56 @@
+---
+description: ZeroBoard project overview — read this first before any task
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# ZeroBoard — Agent Overview
+
+## What This Project Is
+A self-hosted Kanban + List project management tool for small teams.
+Single Rust binary. Embedded Svelte frontend. SQLite database. Zero external dependencies.
+
+## The Non-Negotiable Constraint
+**Everything ships as one binary.** No Docker Compose. No Postgres. No Redis. No Node.js at runtime.
+If a proposed solution requires an external service or a second process, reject it and find a different approach.
+
+## Project Layout
+```
+zeroboard/
+├── backend/      ← Rust (Axum + Tokio + SQLx + rust-embed)
+├── frontend/     ← Svelte 5 + Vite (compiled, embedded into binary)
+├── .cursor/rules/
+├── SPEC.md       ← Full feature spec, DB schema, API routes — source of truth
+└── Makefile      ← build, dev, release targets
+```
+
+## Always Read First
+Before starting any task, check `SPEC.md` for:
+- The locked v1 feature list (do not add features outside it)
+- The exact DB schema (do not deviate without updating SPEC.md)
+- The API route list (follow naming exactly)
+- The WebSocket event protocol (follow event names exactly)
+
+## Coding Priorities (in order)
+1. **Correctness** — it must work
+2. **Security** — auth, input validation, no SQL injection
+3. **Simplicity** — fewest moving parts
+4. **Performance** — RAM target < 80MB with 5 users
+
+## What NOT to Build in V1
+Do not add these even if they seem useful:
+- Email / SMTP notifications
+- OAuth (Google, GitHub)
+- Calendar or Gantt views
+- S3 or cloud file storage
+- Public boards
+- Mobile app
+- Webhooks or Slack integration
+
+## Commit Style
+Use conventional commits:
+- `feat:` new feature
+- `fix:` bug fix
+- `refactor:` code change without behavior change
+- `chore:` tooling, deps, config
+- `docs:` documentation only

@@ -1,0 +1,81 @@
+---
+description: Rules for all database interactions, migrations, and SQLite configuration
+globs: ["backend/src/db/**", "backend/src/models/**", "**/*.sql"]
+alwaysApply: false
+---
+
+# Database — SQLite Rules
+
+## SQLite Configuration
+On every app start, run these PRAGMAs before anything else:
+```sql
+PRAGMA journal_mode = WAL;        -- enables concurrent reads
+PRAGMA synchronous = NORMAL;      -- safe + fast (not OFF)
+PRAGMA foreign_keys = ON;         -- enforce FK constraints
+PRAGMA busy_timeout = 5000;       -- wait up to 5s on lock
+PRAGMA cache_size = -20000;       -- 20MB page cache
+PRAGMA temp_store = MEMORY;       -- temp tables in RAM
+```
+
+## Connection Pool
+```rust
+let pool = sqlx::sqlite::SqlitePoolOptions::new()
+    .max_connections(1)   // SQLite WAL supports 1 writer
+    .min_connections(1)
+    .connect(&database_url).await?;
+```
+**Important:** SQLite in WAL mode supports multiple concurrent readers but only one writer. Use a pool of 1 write connection. For read-heavy paths, open a separate read pool with max_connections(4).
+
+## Migrations
+- All migrations live in `backend/src/db/migrations/`
+- Filename format: `0001_initial.sql`, `0002_add_labels.sql`
+- Use `sqlx::migrate!()` macro to run on startup
+- Migrations are **append-only** — never edit an existing migration file
+- Never drop columns in SQLite (it doesn't support it) — add new columns only
+
+## Schema Rules
+- Primary keys: `TEXT` (UUID strings), never INTEGER autoincrement
+- Timestamps: `INTEGER` (Unix milliseconds), never TEXT dates
+- Booleans: `INTEGER` (0 or 1), never TEXT
+- JSON payloads: `TEXT` (serialize to JSON string before storing)
+- Positions: `REAL` (float for fractional indexing)
+
+## Query Rules
+- Always use `sqlx::query!` or `sqlx::query_as!` macros — never raw string queries
+- Always add indexes for foreign keys and frequently filtered columns:
+```sql
+CREATE INDEX idx_cards_list_id ON cards(list_id);
+CREATE INDEX idx_cards_board_id ON cards(board_id);
+CREATE INDEX idx_activity_log_card_id ON activity_log(card_id);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+```
+- For paginated queries, always use cursor-based pagination (by `created_at`), not OFFSET
+
+## Soft Deletes
+- Boards use `archived INTEGER DEFAULT 0` (not hard delete)
+- Cards, lists, comments use hard delete — cascade via FK
+- When a board is deleted: archive it, do not cascade delete cards (data safety)
+- When a list is deleted: move its cards to a default "Archive" list or hard delete (ask user)
+
+## Cascade Rules
+Define in schema:
+```sql
+FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+```
+Cards cascade delete when their list is deleted.
+Assignees, labels, attachments, time_entries, comments cascade delete when their card is deleted.
+Activity log entries are kept even if the card is deleted (set card_id to NULL).
+
+## Backup
+The binary must support a simple backup command:
+```
+zeroboard backup --output ./backup.db
+```
+This runs `VACUUM INTO 'backup.db'` — a safe online backup of SQLite.
+
+## Never Do
+- Never run raw user input in SQL
+- Never store unhashed passwords
+- Never store JWT secrets in the database
+- Never use `SELECT *` — always name columns explicitly
+- Never ignore sqlx errors — always propagate with `?`
