@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE workspace_members SET role = $3\n         WHERE workspace_id = $1 AND user_id = $2\n           AND ($3 = $4\n                OR role != $4\n                OR (SELECT COUNT(*) FROM workspace_members\n                    WHERE workspace_id = $1 AND role = $4) > 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "0f7d9ecc8d66129928fdbd0442b087df3876f0b907536b219d45e294612061b3"
+}

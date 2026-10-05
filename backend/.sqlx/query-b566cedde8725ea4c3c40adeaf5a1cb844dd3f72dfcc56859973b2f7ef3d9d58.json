@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM workspace_members\n         WHERE workspace_id = $1 AND user_id = $2\n           AND (role != $3\n                OR (SELECT COUNT(*) FROM workspace_members\n                    WHERE workspace_id = $1 AND role = $3) > 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "b566cedde8725ea4c3c40adeaf5a1cb844dd3f72dfcc56859973b2f7ef3d9d58"
+}

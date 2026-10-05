@@ -4,6 +4,7 @@ mod db;
 mod errors;
 mod handlers;
 mod models;
+mod services;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -105,6 +106,8 @@ fn router(state: AppState) -> Router {
         .route("/live", get(live))
         .route("/ready", get(ready))
         .merge(handlers::auth::router(&state))
+        .merge(handlers::workspaces::router(&state))
+        .merge(handlers::boards::router(&state))
         .fallback(|| async { AppError::NotFound })
         .with_state(state)
         .layer(

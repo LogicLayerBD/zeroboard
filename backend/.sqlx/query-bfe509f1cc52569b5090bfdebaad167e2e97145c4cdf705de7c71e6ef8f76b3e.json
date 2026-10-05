@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE boards SET name = $1, updated_at = $2\n           WHERE id = $3 AND archived = 0\n           RETURNING id AS \"id!\", workspace_id, name AS \"name!\", archived AS \"archived!: bool\",\n                     created_by AS \"created_by!\", created_at AS \"created_at!\",\n                     updated_at AS \"updated_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workspace_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "archived!: bool",
+        "ordinal": 3,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_by!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 5,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 6,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bfe509f1cc52569b5090bfdebaad167e2e97145c4cdf705de7c71e6ef8f76b3e"
+}

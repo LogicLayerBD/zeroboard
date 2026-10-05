@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE boards SET archived = 1, updated_at = $1 WHERE id = $2 AND archived = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f06db0d20ca5bbdd116a22b4ac5d54acceff60867e34082e8d8f957d23b55a23"
+}

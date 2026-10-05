@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO lists (id, board_id, name, position, created_at, updated_at)\n             VALUES ($1, $2, $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "f86ced8bc8dd3cb878bc77fb8b901a17e347d9484b2c5558acc1efe1e5a054a5"
+}

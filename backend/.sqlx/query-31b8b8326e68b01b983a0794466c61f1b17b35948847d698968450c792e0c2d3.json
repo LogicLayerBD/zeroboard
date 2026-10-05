@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT w.id AS \"id!\", w.name, w.created_by, w.created_at, w.updated_at\n           FROM workspaces w\n           JOIN workspace_members m ON m.workspace_id = w.id\n           WHERE m.user_id = $1\n           ORDER BY w.created_at, w.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 4,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "31b8b8326e68b01b983a0794466c61f1b17b35948847d698968450c792e0c2d3"
+}

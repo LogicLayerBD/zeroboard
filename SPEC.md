@@ -693,5 +693,7 @@ The app is considered v1-complete when:
 - Rate limiting uses the socket address only. Behind a reverse proxy 
   (Nginx), all clients share one limit. Trusted proxy support is a 
   post-v1 addition.
+- GET /api/workspaces does not include the caller's role. 
+  Fetch /api/workspaces/:id/members to get role information.
 
   

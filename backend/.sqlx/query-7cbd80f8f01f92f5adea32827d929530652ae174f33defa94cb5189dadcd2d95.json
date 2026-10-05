@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT user_id AS \"user_id!\" FROM workspace_members\n           WHERE workspace_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7cbd80f8f01f92f5adea32827d929530652ae174f33defa94cb5189dadcd2d95"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT role AS \"role: WorkspaceRole\"\n           FROM workspace_members\n           WHERE workspace_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "name": "role: WorkspaceRole",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "69fe572bdbe3ba697446e8369a597059fbdba1dcb0ed8e3497a8da98e869ea9b"
+}

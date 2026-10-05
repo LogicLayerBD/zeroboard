@@ -189,11 +189,11 @@ fn enforce_rate_limit(limiter: &RateLimiter, ip: IpAddr, endpoint: &str) -> Resu
     Err(AppError::TooManyRequests)
 }
 
-fn normalize_email(email: &str) -> String {
+pub(crate) fn normalize_email(email: &str) -> String {
     email.trim().to_lowercase()
 }
 
-fn is_valid_email(email: &str) -> bool {
+pub(crate) fn is_valid_email(email: &str) -> bool {
     if email.len() > MAX_EMAIL_LEN
         || email.chars().any(|c| c.is_whitespace() || c.is_control())
     {

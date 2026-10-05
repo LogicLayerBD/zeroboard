@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.role AS \"role?: WorkspaceRole\"\n           FROM workspaces w\n           LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = $2\n           WHERE w.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "role?: WorkspaceRole",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "55bbc050959e01477330964d42552892fef3faef3ff2c5c5387aa3c43393886f"
+}

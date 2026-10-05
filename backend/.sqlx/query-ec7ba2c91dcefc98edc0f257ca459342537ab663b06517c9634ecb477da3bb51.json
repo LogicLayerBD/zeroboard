@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO workspaces (id, name, created_by, created_at, updated_at)\n           VALUES ($1, $2, $3, $4, $5)\n           RETURNING id AS \"id!\", name AS \"name!\", created_by AS \"created_by!\",\n                     created_at AS \"created_at!\", updated_at AS \"updated_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 3,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 4,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ec7ba2c91dcefc98edc0f257ca459342537ab663b06517c9634ecb477da3bb51"
+}

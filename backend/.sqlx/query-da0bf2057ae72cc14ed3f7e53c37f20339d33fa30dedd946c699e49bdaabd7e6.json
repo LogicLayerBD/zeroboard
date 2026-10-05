@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT archived AS \"archived: bool\",\n                      (SELECT COUNT(*) FROM cards WHERE board_id = $1) AS \"cards!: i64\"\n               FROM boards WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "archived: bool",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "cards!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "da0bf2057ae72cc14ed3f7e53c37f20339d33fa30dedd946c699e49bdaabd7e6"
+}

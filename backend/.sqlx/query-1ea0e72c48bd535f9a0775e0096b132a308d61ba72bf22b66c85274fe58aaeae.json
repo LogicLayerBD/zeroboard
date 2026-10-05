@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.id AS \"user_id!\", u.name, u.email, u.avatar_color,\n                  m.role AS \"role: WorkspaceRole\", m.joined_at\n           FROM workspace_members m\n           JOIN users u ON u.id = m.user_id\n           WHERE m.workspace_id = $1 AND m.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "email",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "avatar_color",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "role: WorkspaceRole",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "joined_at",
+        "ordinal": 5,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1ea0e72c48bd535f9a0775e0096b132a308d61ba72bf22b66c85274fe58aaeae"
+}
