@@ -14,7 +14,6 @@ const BEARER_SCHEME: &str = "Bearer";
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub id: String,
-    pub email: String,
 }
 
 pub async fn require_auth(
@@ -27,10 +26,7 @@ pub async fn require_auth(
         tracing::debug!(error = %err, "access token rejected");
         AppError::Unauthorized
     })?;
-    req.extensions_mut().insert(AuthUser {
-        id: claims.sub,
-        email: claims.email,
-    });
+    req.extensions_mut().insert(AuthUser { id: claims.sub });
     Ok(next.run(req).await)
 }
 

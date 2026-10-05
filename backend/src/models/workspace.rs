@@ -49,14 +49,6 @@ pub enum WorkspaceRole {
     Viewer,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
-pub struct WorkspaceMember {
-    pub workspace_id: String,
-    pub user_id: String,
-    pub role: WorkspaceRole,
-    pub joined_at: i64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

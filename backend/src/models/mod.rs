@@ -1,7 +1,6 @@
 //! Row structs mirroring the tables in `db/migrations`.
 //! IDs are UUID strings, timestamps are Unix milliseconds, JSON columns are raw strings.
 
-mod activity;
 mod attachment;
 mod board;
 mod card;
@@ -14,7 +13,6 @@ mod time_entry;
 mod user;
 mod workspace;
 
-pub use activity::ActivityLog;
 pub use attachment::Attachment;
 pub use board::Board;
 pub use card::{Card, CardAssignee};
@@ -25,4 +23,4 @@ pub use notification::Notification;
 pub use refresh_token::RefreshToken;
 pub use time_entry::TimeEntry;
 pub use user::{User, UserRole};
-pub use workspace::{Workspace, WorkspaceMember, WorkspaceRole};
+pub use workspace::{Workspace, WorkspaceRole};
