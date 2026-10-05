@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use super::positions::{reposition, slot_after, Sibling, POSITION_STEP};
-use super::{activity, is_foreign_key_violation, is_unique_violation, now_ms};
+use super::{activity, is_foreign_key_violation, is_unique_violation, notifications, now_ms};
 use crate::errors::AppError;
 use crate::models::{Attachment, Card, CardAssignee, CardLabel, Comment, Label, TimeEntry};
 use crate::AppState;
@@ -184,8 +184,10 @@ pub async fn details(state: &AppState, card: Card) -> Result<CardDetails, AppErr
     })
 }
 
+/// Notifies assignees (except `actor_id`) when the updated card is due within 24 hours.
 pub async fn update(
     state: &AppState,
+    actor_id: &str,
     card_id: &str,
     changes: CardChanges,
 ) -> Result<Card, AppError> {
@@ -218,7 +220,8 @@ pub async fn update(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    tracing::info!(%card_id, "card updated");
+    tracing::info!(%card_id, %actor_id, "card updated");
+    notifications::notify_if_due_soon(state, actor_id, &card).await;
     Ok(card)
 }
 
@@ -399,6 +402,7 @@ pub async fn add_assignee(
         json!({ "user_id": assignee_id }),
     )
     .await;
+    notifications::notify_assigned(state, actor_id, card, assignee_id).await;
     Ok(CardAssignee {
         card_id: card.id.clone(),
         user_id: assignee_id.to_string(),

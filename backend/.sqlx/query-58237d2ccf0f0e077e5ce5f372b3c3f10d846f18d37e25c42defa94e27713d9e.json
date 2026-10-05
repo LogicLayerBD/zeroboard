@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) AS \"n!: i64\" FROM activity_log WHERE card_id = $1 AND action = 'added_comment'",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58237d2ccf0f0e077e5ce5f372b3c3f10d846f18d37e25c42defa94e27713d9e"
+}

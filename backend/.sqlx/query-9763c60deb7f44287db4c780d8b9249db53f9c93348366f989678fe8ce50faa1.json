@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(SUM(minutes), 0) AS \"total!: i64\" FROM time_entries WHERE card_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "total!: i64",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9763c60deb7f44287db4c780d8b9249db53f9c93348366f989678fe8ce50faa1"
+}

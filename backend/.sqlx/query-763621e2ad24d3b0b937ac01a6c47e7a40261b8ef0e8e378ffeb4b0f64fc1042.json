@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT a.user_id AS \"user_id!\"\n           FROM card_assignees a\n           WHERE a.card_id = $1\n             AND a.user_id != $2\n             AND NOT EXISTS (\n               SELECT 1 FROM notifications n\n               WHERE n.user_id = a.user_id\n                 AND n.type = $3\n                 AND json_extract(n.payload, '$.card_id') = $1\n                 AND n.created_at >= $4\n             )\n           ORDER BY a.user_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "763621e2ad24d3b0b937ac01a6c47e7a40261b8ef0e8e378ffeb4b0f64fc1042"
+}

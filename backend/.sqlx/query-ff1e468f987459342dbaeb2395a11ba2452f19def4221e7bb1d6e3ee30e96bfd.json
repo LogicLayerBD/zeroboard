@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) AS \"n!: i64\" FROM attachments WHERE card_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "n!: i64",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ff1e468f987459342dbaeb2395a11ba2452f19def4221e7bb1d6e3ee30e96bfd"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE comments SET body = $1, updated_at = $2\n           WHERE id = $3\n           RETURNING id AS \"id!\", card_id AS \"card_id!\", user_id AS \"user_id!\", body AS \"body!\",\n                     created_at AS \"created_at!\", updated_at AS \"updated_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "body!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 4,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 5,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8f1e8353164fb21e1c352d98c4a7cf819181a8526198f9948f600b9db33189bf"
+}

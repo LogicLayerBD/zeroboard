@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT user_id AS \"user_id!\"\n           FROM card_assignees\n           WHERE card_id = $1 AND user_id != $2\n           ORDER BY user_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c27a4b09c09633ff738d47698fe365172146bad8590fef3e12e80415f1311ed1"
+}

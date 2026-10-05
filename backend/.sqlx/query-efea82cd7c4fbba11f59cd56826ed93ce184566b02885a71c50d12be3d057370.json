@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT b.workspace_id AS \"workspace_id?\",\n                  w.name AS \"workspace_name?\",\n                  COUNT(a.id) AS \"attachment_count!: i64\",\n                  COALESCE(SUM(a.size_bytes), 0) AS \"size_bytes!: i64\"\n           FROM attachments a\n           JOIN cards c ON c.id = a.card_id\n           JOIN boards b ON b.id = c.board_id\n           LEFT JOIN workspaces w ON w.id = b.workspace_id\n           GROUP BY b.workspace_id, w.name\n           ORDER BY COALESCE(SUM(a.size_bytes), 0) DESC, b.workspace_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "workspace_id?",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workspace_name?",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "attachment_count!: i64",
+        "ordinal": 2,
+        "type_info": "Int64"
+      },
+      {
+        "name": "size_bytes!: i64",
+        "ordinal": 3,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "efea82cd7c4fbba11f59cd56826ed93ce184566b02885a71c50d12be3d057370"
+}

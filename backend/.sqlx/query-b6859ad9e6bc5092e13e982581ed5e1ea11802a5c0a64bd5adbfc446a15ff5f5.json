@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE notifications SET read = 1 WHERE user_id = $1 AND read = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b6859ad9e6bc5092e13e982581ed5e1ea11802a5c0a64bd5adbfc446a15ff5f5"
+}

@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use axum::body::{to_bytes, Body};
+use axum::body::{to_bytes, Body, Bytes};
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
-use axum::http::{Method, Request, StatusCode};
+use axum::http::{HeaderMap, Method, Request, StatusCode};
 use axum::Router;
 use serde_json::Value;
 use tower::ServiceExt;
@@ -15,6 +15,7 @@ use crate::AppState;
 
 const MAX_TEST_BODY_BYTES: usize = 1024 * 1024;
 const TEST_PASSWORD: &str = "correct-horse";
+const DEFAULT_MAX_ATTACHMENT_SIZE_MB: u64 = 25;
 
 pub struct TestUser {
     pub id: String,
@@ -30,6 +31,10 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn new() -> Self {
+        Self::with_max_attachment_size_mb(DEFAULT_MAX_ATTACHMENT_SIZE_MB).await
+    }
+
+    pub async fn with_max_attachment_size_mb(max_attachment_size_mb: u64) -> Self {
         let dir = std::env::temp_dir().join(format!("zeroboard-handlers-{}", uuid::Uuid::new_v4()));
         let url = format!("sqlite://{}", dir.join("test.db").display());
         let db = crate::db::connect(&url).await.unwrap();
@@ -43,7 +48,7 @@ impl TestApp {
             refresh_token_expiry_days: 30,
             database_url: url,
             attachments_dir: dir.clone(),
-            max_attachment_size_mb: 25,
+            max_attachment_size_mb,
             app_name: "ZeroBoard".into(),
             first_user_is_admin: true,
         };
@@ -101,6 +106,31 @@ impl TestApp {
             serde_json::from_slice(&bytes).unwrap()
         };
         (status, body)
+    }
+
+    /// Sends an arbitrary body and returns the raw response (for uploads/downloads).
+    pub async fn send_raw(
+        &self,
+        method: Method,
+        uri: &str,
+        user: &TestUser,
+        content_type: Option<&str>,
+        body: Vec<u8>,
+    ) -> (StatusCode, HeaderMap, Bytes) {
+        let mut req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(AUTHORIZATION, format!("Bearer {}", user.token));
+        if let Some(content_type) = content_type {
+            req = req.header(CONTENT_TYPE, content_type);
+        }
+        let req = req.body(Body::from(body)).unwrap();
+
+        let response = self.app.clone().oneshot(req).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, headers, bytes)
     }
 
     pub async fn get(&self, uri: &str, user: &TestUser) -> (StatusCode, Value) {
@@ -187,7 +217,10 @@ pub struct BoardFixture {
 
 impl BoardFixture {
     pub async fn new() -> Self {
-        let t = TestApp::new().await;
+        Self::with_app(TestApp::new().await).await
+    }
+
+    pub async fn with_app(t: TestApp) -> Self {
         let admin = t.user("admin@example.com").await;
         let member = t.user("member@example.com").await;
         let viewer = t.user("viewer@example.com").await;
@@ -205,5 +238,42 @@ impl BoardFixture {
             workspace_id,
             board_id,
         }
+    }
+
+    /// Creates a list (as admin) and a card in it (as member); returns the card id.
+    pub async fn card(&self, title: &str) -> String {
+        let (status, list) = self
+            .t
+            .post(
+                &format!("/api/boards/{}/lists", self.board_id),
+                &self.admin,
+                serde_json::json!({ "name": "L" }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "create list failed: {list}");
+        let list_id = list["id"].as_str().unwrap();
+        let (status, card) = self
+            .t
+            .post(
+                &format!("/api/lists/{list_id}/cards"),
+                &self.member,
+                serde_json::json!({ "title": title }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "create card failed: {card}");
+        card["id"].as_str().unwrap().to_string()
+    }
+
+    /// Assigns `user_id` to the card as the admin.
+    pub async fn assign(&self, card_id: &str, user_id: &str) {
+        let (status, body) = self
+            .t
+            .post(
+                &format!("/api/cards/{card_id}/assignees"),
+                &self.admin,
+                serde_json::json!({ "user_id": user_id }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "assign failed: {body}");
     }
 }

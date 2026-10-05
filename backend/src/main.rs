@@ -8,6 +8,7 @@ mod services;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Context;
 use axum::extract::State;
@@ -37,6 +38,8 @@ pub struct AppState {
     pub config: Config,
     pub login_limiter: Arc<RateLimiter>,
     pub register_limiter: Arc<RateLimiter>,
+    /// Process start, for uptime reporting.
+    pub started_at: Instant,
 }
 
 impl AppState {
@@ -47,6 +50,7 @@ impl AppState {
             config,
             login_limiter: Arc::new(RateLimiter::new(LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW)),
             register_limiter: Arc::new(RateLimiter::new(REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW)),
+            started_at: Instant::now(),
         }
     }
 }
@@ -111,6 +115,11 @@ fn router(state: AppState) -> Router {
         .merge(handlers::lists::router(&state))
         .merge(handlers::cards::router(&state))
         .merge(handlers::labels::router(&state))
+        .merge(handlers::attachments::router(&state))
+        .merge(handlers::time_entries::router(&state))
+        .merge(handlers::comments::router(&state))
+        .merge(handlers::notifications::router(&state))
+        .merge(handlers::admin::router(&state))
         .fallback(|| async { AppError::NotFound })
         .with_state(state)
         .layer(

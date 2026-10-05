@@ -19,6 +19,8 @@ pub enum AppError {
     BadRequest(String),
     #[error("too many requests")]
     TooManyRequests,
+    #[error("payload too large")]
+    PayloadTooLarge,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -47,6 +49,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::BadRequest(reason) => (StatusCode::BAD_REQUEST, reason.clone()),
             AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
+            AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, self.to_string()),
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "internal error");
                 (
@@ -97,6 +100,10 @@ mod tests {
         assert_eq!(
             render(AppError::TooManyRequests).await,
             (StatusCode::TOO_MANY_REQUESTS, json!({ "error": "too many requests" }))
+        );
+        assert_eq!(
+            render(AppError::PayloadTooLarge).await,
+            (StatusCode::PAYLOAD_TOO_LARGE, json!({ "error": "payload too large" }))
         );
     }
 

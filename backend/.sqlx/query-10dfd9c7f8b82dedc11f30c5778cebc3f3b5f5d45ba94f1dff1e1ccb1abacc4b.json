@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO attachments (id, card_id, filename, stored_path, size_bytes, uploaded_by,\n                                   uploaded_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7)\n           RETURNING id AS \"id!\", card_id AS \"card_id!\", filename AS \"filename!\",\n                     stored_path AS \"stored_path!\", size_bytes AS \"size_bytes!\",\n                     uploaded_by AS \"uploaded_by!\", uploaded_at AS \"uploaded_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "filename!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "stored_path!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "size_bytes!",
+        "ordinal": 4,
+        "type_info": "Int64"
+      },
+      {
+        "name": "uploaded_by!",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "uploaded_at!",
+        "ordinal": 6,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "10dfd9c7f8b82dedc11f30c5778cebc3f3b5f5d45ba94f1dff1e1ccb1abacc4b"
+}

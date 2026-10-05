@@ -1,8 +1,13 @@
+pub mod admin;
+pub mod attachments;
 pub mod auth;
 pub mod boards;
 pub mod cards;
+pub mod comments;
 pub mod labels;
 pub mod lists;
+pub mod notifications;
+pub mod time_entries;
 pub mod workspaces;
 
 #[cfg(test)]

@@ -176,7 +176,9 @@ pub async fn update_card(
         due_date: body.due_date.map(validate_due_date).transpose()?,
     };
     require_card_role(&state, &card_id, &auth_user.id, WorkspaceRole::Member).await?;
-    Ok(Json(cards::update(&state, &card_id, changes).await?))
+    Ok(Json(
+        cards::update(&state, &auth_user.id, &card_id, changes).await?,
+    ))
 }
 
 pub async fn delete_card(

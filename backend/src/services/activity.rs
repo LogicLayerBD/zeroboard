@@ -9,6 +9,9 @@ pub const ADDED_ASSIGNEE: &str = "added_assignee";
 pub const REMOVED_ASSIGNEE: &str = "removed_assignee";
 pub const ADDED_LABEL: &str = "added_label";
 pub const REMOVED_LABEL: &str = "removed_label";
+pub const ADDED_ATTACHMENT: &str = "added_attachment";
+pub const REMOVED_ATTACHMENT: &str = "removed_attachment";
+pub const ADDED_COMMENT: &str = "added_comment";
 
 /// Uses the write pool, so never call this while holding an open write transaction.
 pub async fn record(

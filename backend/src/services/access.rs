@@ -2,7 +2,7 @@
 //! caller may not touch is 403.
 
 use crate::errors::AppError;
-use crate::models::{Board, Card, Label, List, WorkspaceRole};
+use crate::models::{Board, Card, Label, List, UserRole, WorkspaceRole};
 use crate::AppState;
 
 /// Requires the workspace to exist and `user_id` to hold at least `required` in it.
@@ -35,6 +35,17 @@ pub async fn require_board_role(
     user_id: &str,
     required: WorkspaceRole,
 ) -> Result<Board, AppError> {
+    let (board, _) = require_board_access(state, board_id, user_id, required).await?;
+    Ok(board)
+}
+
+/// Like [`require_board_role`], also returning the caller's actual role.
+pub async fn require_board_access(
+    state: &AppState,
+    board_id: &str,
+    user_id: &str,
+    required: WorkspaceRole,
+) -> Result<(Board, WorkspaceRole), AppError> {
     let board = sqlx::query_as!(
         Board,
         r#"SELECT id AS "id!", workspace_id, name, archived AS "archived: bool",
@@ -59,8 +70,8 @@ pub async fn require_board_role(
     .await?
     .map(|row| row.role);
 
-    ensure_role(role, required, workspace_id, user_id)?;
-    Ok(board)
+    let role = ensure_role(role, required, workspace_id, user_id)?;
+    Ok((board, role))
 }
 
 /// Loads a list on a live board and requires `user_id` to hold at least `required` there.
@@ -92,6 +103,18 @@ pub async fn require_card_role(
     user_id: &str,
     required: WorkspaceRole,
 ) -> Result<Card, AppError> {
+    let (card, _) = require_card_access(state, card_id, user_id, required).await?;
+    Ok(card)
+}
+
+/// Like [`require_card_role`], also returning the caller's actual role
+/// (for "own item, or workspace admin" checks).
+pub async fn require_card_access(
+    state: &AppState,
+    card_id: &str,
+    user_id: &str,
+    required: WorkspaceRole,
+) -> Result<(Card, WorkspaceRole), AppError> {
     let card = sqlx::query_as!(
         Card,
         r#"SELECT id AS "id!", list_id, board_id, title, description, position, due_date,
@@ -104,8 +127,25 @@ pub async fn require_card_role(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    require_board_role(state, &card.board_id, user_id, required).await?;
-    Ok(card)
+    let (_, role) = require_board_access(state, &card.board_id, user_id, required).await?;
+    Ok((card, role))
+}
+
+/// Requires `user_id` to be an instance-wide (global) admin.
+pub async fn require_global_admin(state: &AppState, user_id: &str) -> Result<(), AppError> {
+    let role = sqlx::query!(
+        r#"SELECT role AS "role: UserRole" FROM users WHERE id = $1"#,
+        user_id
+    )
+    .fetch_optional(&state.read_db)
+    .await?
+    .map(|row| row.role);
+
+    if role == Some(UserRole::Admin) {
+        return Ok(());
+    }
+    tracing::warn!(%user_id, actual = ?role, "global admin access denied");
+    Err(AppError::Forbidden)
 }
 
 /// Loads a label on a live board and requires `user_id` to hold at least `required` there.

@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO time_entries (id, card_id, user_id, minutes, description, logged_at)\n           VALUES ($1, $2, $3, $4, $5, $6)\n           RETURNING id AS \"id!\", card_id AS \"card_id!\", user_id AS \"user_id!\",\n                     minutes AS \"minutes!\", description, logged_at AS \"logged_at!\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "card_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "minutes!",
+        "ordinal": 3,
+        "type_info": "Int64"
+      },
+      {
+        "name": "description",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "logged_at!",
+        "ordinal": 5,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "684bd067c5e5034a46a4f45d2c148cade4d73965d6e712db056afbcac1b6c3f9"
+}
