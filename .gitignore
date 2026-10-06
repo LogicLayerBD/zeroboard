@@ -27,3 +27,5 @@ backups/
 .DS_Store
 *.swp
 .idea/
+
+launch
