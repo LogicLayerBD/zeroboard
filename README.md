@@ -18,8 +18,10 @@ ZeroBoard runs as **one binary** on a **$5/mo VPS** and uses less than **80MB of
 
 ```bash
 # Download the latest binary
-curl -L https://github.com/LogicLayerBD/zeroboard/releases/latest/download/zeroboard-linux-x86_64 -o zeroboard
-chmod +x zeroboard
+curl -LO https://github.com/LogicLayerBD/zeroboard/releases/latest/download/zeroboard-linux-x86_64
+curl -LO https://github.com/LogicLayerBD/zeroboard/releases/latest/download/zeroboard-linux-x86_64.sha256
+sha256sum -c zeroboard-linux-x86_64.sha256
+mv zeroboard-linux-x86_64 zeroboard && chmod +x zeroboard
 
 # Configure
 cp .env.example .env
@@ -95,7 +97,8 @@ The SQLite database and attachments live in `./data` on the host.
 
 ### Requirements
 
-- Linux x86_64 (Ubuntu 20.04+ recommended)
+- Linux x86_64 with glibc 2.35+ for the release binary (Ubuntu 22.04+, Debian 12+);
+  older distributions can build from source
 - 512MB RAM minimum
 - 1GB disk space (for attachments)
 
@@ -235,6 +238,24 @@ cd zeroboard
 make setup
 make release
 ```
+
+---
+
+## Releasing
+
+1. Bump `version` in `backend/Cargo.toml` (then `cargo update -p zeroboard`) and
+   `frontend/package.json` (`npm version X.Y.Z --no-git-tag-version`).
+2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md`.
+3. Commit, then tag and push:
+
+```bash
+git tag -a vX.Y.Z -m "ZeroBoard vX.Y.Z"
+git push origin main vX.Y.Z
+```
+
+The `Release` workflow checks that the tag matches `Cargo.toml`, runs all tests, builds the
+Linux binary and publishes a GitHub release with the binary, its `.sha256` and the
+changelog section as notes.
 
 ---
 
