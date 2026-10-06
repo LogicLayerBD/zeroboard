@@ -14,8 +14,9 @@ dev-frontend:
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
+# npm ci installs exactly what package-lock.json pins and never rewrites it.
 frontend:
-	cd frontend && npm install && npm run build
+	cd frontend && npm ci && npm run build
 
 backend: frontend
 	cd backend && cargo build
