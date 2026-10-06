@@ -1,0 +1,6 @@
+frontend/node_modules
+backend/target
+!backend/target/release/zeroboard
+.env
+data/
+.git

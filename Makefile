@@ -51,3 +51,21 @@ backup:
 clean:
 	cd frontend && rm -rf dist node_modules
 	cd backend && cargo clean
+
+# ── Docker (optional) ─────────────────────────────────────────────────────────
+
+.PHONY: docker-build docker-run docker-stop docker-logs
+
+DOCKER_IMAGE ?= zeroboard:latest
+
+docker-build: release
+	docker build -t $(DOCKER_IMAGE) .
+
+docker-run:
+	docker compose up -d
+
+docker-stop:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f

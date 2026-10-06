@@ -1,0 +1,17 @@
+services:
+  zeroboard:
+    build: .
+    image: zeroboard:latest
+    restart: unless-stopped
+    env_file: .env
+    # Pinned so the DB and attachments always land inside the ./data mount,
+    # regardless of the paths set in .env.
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: sqlite://data/zeroboard.db
+      ATTACHMENTS_DIR: data/attachments
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data

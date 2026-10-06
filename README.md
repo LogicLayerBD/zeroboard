@@ -1,7 +1,7 @@
 # ZeroBoard
 
 > Real-time Kanban + List project management for small teams.  
-> Single binary. No Docker. No Postgres. No Redis. Just drop it and run.
+> Single binary. No Docker Required. No Postgres. No Redis. Just drop it and run.
 
 ---
 
@@ -13,6 +13,8 @@ ZeroBoard runs as **one binary** on a **$5/mo VPS** and uses less than **80MB of
 ---
 
 ## Quick Start
+
+### Option A — Single Binary (Recommended)
 
 ```bash
 # Download the latest binary
@@ -28,6 +30,30 @@ cp .env.example .env
 ```
 
 Open `http://localhost:3000` — the first user to register becomes admin.
+
+### Option B — Docker
+
+Even in Docker, ZeroBoard runs as a single container with no external dependencies.
+
+```bash
+# Build the binary and image (on Linux x86_64 — the binary is copied into the image as-is)
+make docker-build
+
+# Configure
+cp .env.example .env
+# Edit .env — at minimum, change JWT_SECRET
+
+# Persistent data dir, owned by the container's non-root user (UID 1000)
+mkdir -p data/attachments && sudo chown -R 1000:1000 data
+
+# Run
+docker compose up -d
+```
+
+The SQLite database and attachments live in `./data` on the host.
+
+> **Note:** The Docker image must be built on Linux x86_64. 
+> On Mac or Windows, build on your VPS directly or use a CI pipeline.
 
 ---
 
