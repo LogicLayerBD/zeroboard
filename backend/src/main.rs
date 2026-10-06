@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod db;
 mod errors;
+mod frontend;
 mod handlers;
 mod models;
 mod services;
@@ -27,20 +28,15 @@ use crate::auth::rate_limit::{
     self, RateLimiter, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW, REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW,
 };
 use crate::config::Config;
-use crate::errors::AppError;
 use crate::ws::WsHub;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 const DEFAULT_LOG_FILTER: &str = "zeroboard=info,tower_http=info";
 
-/// Sent on every response (see security rules). `style-src 'unsafe-inline'` is
-/// required by Svelte's inline styles; scripts stay restricted to 'self'.
+const CONTENT_SECURITY_POLICY_HEADER: &str = "content-security-policy";
+/// Sent on every response (see security rules), together with the CSP from
+/// `content_security_policy()`.
 const SECURITY_HEADERS: &[(&str, &str)] = &[
-    (
-        "content-security-policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
-         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
-    ),
     ("x-content-type-options", "nosniff"),
     ("x-frame-options", "DENY"),
     ("x-xss-protection", "1; mode=block"),
@@ -149,7 +145,7 @@ fn router(state: AppState) -> Router {
         .merge(handlers::notifications::router(&state))
         .merge(handlers::admin::router(&state))
         .merge(ws::router())
-        .fallback(|| async { AppError::NotFound })
+        .fallback(frontend::serve)
         .with_state(state);
 
     with_security_headers(app)
@@ -173,6 +169,19 @@ fn router(state: AppState) -> Router {
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
 }
 
+/// `style-src 'unsafe-inline'` is required by Svelte's inline styles. Scripts stay
+/// restricted to 'self' plus the hashes of SvelteKit's inline bootstrap script.
+fn content_security_policy() -> String {
+    let script_hashes: String = frontend::inline_script_hashes()
+        .iter()
+        .map(|hash| format!(" '{hash}'"))
+        .collect();
+    format!(
+        "default-src 'self'; script-src 'self'{script_hashes}; style-src 'self' 'unsafe-inline'; \
+         object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    )
+}
+
 fn with_security_headers(app: Router) -> Router {
     let app = SECURITY_HEADERS.iter().fold(app, |app, (name, value)| {
         app.layer(SetResponseHeaderLayer::overriding(
@@ -180,6 +189,12 @@ fn with_security_headers(app: Router) -> Router {
             HeaderValue::from_static(value),
         ))
     });
+    let csp = HeaderValue::from_str(&content_security_policy())
+        .expect("CSP contains only header-safe characters");
+    let app = app.layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static(CONTENT_SECURITY_POLICY_HEADER),
+        csp,
+    ));
     app.layer(SetResponseHeaderLayer::if_not_present(
         CACHE_CONTROL,
         HeaderValue::from_static(DEFAULT_CACHE_CONTROL),
@@ -339,10 +354,9 @@ mod tests {
                 assert_eq!(headers[*name], *value, "{uri}: {name}");
             }
             assert_eq!(headers[CACHE_CONTROL], DEFAULT_CACHE_CONTROL, "{uri}");
-            assert!(headers["content-security-policy"]
-                .to_str()
-                .unwrap()
-                .contains("frame-ancestors 'none'"));
+            let csp = headers[CONTENT_SECURITY_POLICY_HEADER].to_str().unwrap();
+            assert!(csp.contains("frame-ancestors 'none'"), "{uri}");
+            assert!(csp.contains("script-src 'self' 'sha256-"), "{uri}");
         }
     }
 

@@ -8,7 +8,9 @@ publish = false
 axum = { version = "0.7", features = ["multipart", "ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "uuid"] }
-rust-embed = "8"
+rust-embed = { version = "8", features = ["mime-guess"] }
+sha2 = "0.10"
+base64 = "0.22"
 tokio-tungstenite = "0.21"
 jsonwebtoken = "9"
 bcrypt = "0.15"
