@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend release clean frontend backend setup db-reset backup
+.PHONY: dev dev-backend dev-frontend release clean frontend backend setup db-reset backup deploy
 
 # ── Dev ──────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,10 @@ release: frontend
 	@echo ""
 	@echo "✅ Binary ready: backend/target/release/zeroboard"
 	@ls -lh backend/target/release/zeroboard
+
+# On the server: backup, pull, build, restart, wait for /ready.
+deploy:
+	scripts/deploy.sh
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 

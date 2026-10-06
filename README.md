@@ -169,6 +169,20 @@ journalctl -u zeroboard --since 1h  # last hour
 
 Database migrations run automatically on startup.
 
+If the service runs straight from the git checkout (its `WorkingDirectory` holds `.env`,
+`data/` and the repo), one command does everything:
+
+```bash
+make deploy
+```
+
+It refuses to run with local changes, takes a `pre-deploy` backup (older backups are never
+deleted), pulls with `--ff-only`, builds, restarts the service, and waits for `/ready`. On
+failure it prints recent logs and the exact rollback command. `SKIP_BACKUP=1 make deploy`
+skips the backup; `SERVICE=name` targets a differently named unit.
+
+If the binary is installed elsewhere:
+
 ```bash
 # From source
 git pull && make release
