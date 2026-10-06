@@ -148,6 +148,34 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+Save it as `/etc/systemd/system/zeroboard.service`, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now zeroboard
+```
+
+### Logs
+
+```bash
+journalctl -u zeroboard -f          # follow live
+journalctl -u zeroboard --since 1h  # last hour
+```
+
+### Upgrading
+
+Database migrations run automatically on startup.
+
+```bash
+# From source
+git pull && make release
+sudo install -m 755 backend/target/release/zeroboard /opt/zeroboard/zeroboard.new
+sudo mv /opt/zeroboard/zeroboard.new /opt/zeroboard/zeroboard
+sudo systemctl restart zeroboard
+```
+
+Copying to `.new` and renaming swaps the binary atomically; copying straight over the running binary fails with "Text file busy".
+
 ---
 
 
@@ -156,7 +184,7 @@ WantedBy=multi-user.target
 
 ```bash
 # Requirements: Rust 1.75+, Node.js 20+
-git clone https://github.com/yourusername/zeroboard
+git clone https://github.com/LogicLayerBD/zeroboard
 cd zeroboard
 make setup
 make release
