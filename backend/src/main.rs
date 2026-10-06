@@ -1,4 +1,5 @@
 mod auth;
+mod cli;
 mod config;
 mod db;
 mod errors;
@@ -88,6 +89,16 @@ async fn main() -> anyhow::Result<()> {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER)),
         )
         .init();
+
+    match cli::parse(std::env::args().skip(1))? {
+        cli::Command::Serve => {}
+        cli::Command::Backup { output } => {
+            return db::backup(&config::database_url_from_env(), &output).await;
+        }
+        cli::Command::Restore { input } => {
+            return db::restore(&config::database_url_from_env(), &input).await;
+        }
+    }
 
     let config = Config::from_env().context("failed to load configuration")?;
     tracing::info!(?config, "configuration loaded");

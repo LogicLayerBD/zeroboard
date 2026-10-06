@@ -176,6 +176,30 @@ sudo systemctl restart zeroboard
 
 Copying to `.new` and renaming swaps the binary atomically; copying straight over the running binary fails with "Text file busy".
 
+### Backup & Restore
+
+Run both scripts from the install directory (the one holding `.env` and `data/`).
+If you use a downloaded binary, point them at it with `ZEROBOARD_BIN=./zeroboard`.
+
+```bash
+# Database snapshot + attachments → backups/zeroboard-YYYYMMDD-HHMMSS.tar.gz
+# Safe while the server is running; deletes archives older than KEEP_DAYS (default 14).
+scripts/backup.sh
+
+# Stops the service, archives the current data as zeroboard-pre-restore-*.tar.gz,
+# restores the archive, and starts the service again.
+scripts/restore.sh backups/zeroboard-20260101-030000.tar.gz
+```
+
+Nightly backups with cron (`crontab -e` as the service user):
+
+```cron
+0 3 * * * cd /opt/zeroboard && ZEROBOARD_BIN=./zeroboard scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+Archives are only as safe as the disk they're on — copy `backups/` to another machine regularly.
+For a database-only snapshot, the binary also supports `zeroboard backup --output file.db`.
+
 ---
 
 

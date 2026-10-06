@@ -59,6 +59,12 @@ impl fmt::Debug for Config {
     }
 }
 
+/// Database location only, for CLI commands (backup/restore) that must not
+/// require the server's secrets.
+pub fn database_url_from_env() -> String {
+    std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string())
+}
+
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         Self::from_lookup(|key| std::env::var(key).ok())

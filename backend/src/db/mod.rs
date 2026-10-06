@@ -1,11 +1,15 @@
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{
-    SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous,
+    SqliteConnectOptions, SqliteConnection, SqliteJournalMode, SqlitePool, SqlitePoolOptions,
+    SqliteSynchronous,
 };
+use sqlx::{ConnectOptions, Connection};
 
 static MIGRATOR: Migrator = sqlx::migrate!("./src/db/migrations");
 
@@ -22,6 +26,16 @@ const READ_MIN_CONNECTIONS: u32 = 1;
 /// Reads can tolerate waiting longer than writes (e.g. during a WAL checkpoint).
 const READ_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const READ_ONLY_MODE_PARAM: &str = "mode=ro";
+
+/// A backup may wait behind the server's writes; give it longer than a request would.
+const BACKUP_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
+/// SQLite's side files for a WAL database live next to it as `<db>-wal` / `<db>-shm`.
+const WAL_SUFFIX: &str = "-wal";
+const SHM_SUFFIX: &str = "-shm";
+/// The backup is copied next to the live database first so the final swap is a same-filesystem rename.
+const RESTORE_STAGING_SUFFIX: &str = ".restoring";
+const INTEGRITY_CHECK_OK: &str = "ok";
+const MIGRATIONS_TABLE: &str = "_sqlx_migrations";
 
 pub async fn connect(database_url: &str) -> anyhow::Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(database_url)
@@ -103,6 +117,108 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         "database migrations up to date"
     );
     Ok(())
+}
+
+/// Writes a consistent snapshot of the database to `output` with `VACUUM INTO`.
+/// Safe while the server is running. Refuses to overwrite an existing file.
+pub async fn backup(database_url: &str, output: &Path) -> anyhow::Result<()> {
+    anyhow::ensure!(!output.exists(), "backup output {} already exists", output.display());
+    if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("failed to create backup directory {}", parent.display()))?;
+    }
+    let output_str = output.to_str().context("backup output path must be valid UTF-8")?;
+
+    let mut conn = SqliteConnectOptions::from_str(database_url)
+        .context("invalid DATABASE_URL")?
+        .busy_timeout(BACKUP_BUSY_TIMEOUT)
+        .connect()
+        .await
+        .context("failed to open database (does it exist?)")?;
+    sqlx::query("VACUUM INTO ?")
+        .bind(output_str)
+        .execute(&mut conn)
+        .await
+        .context("VACUUM INTO failed")?;
+    conn.close().await.context("failed to close database")?;
+
+    tracing::info!(output = %output.display(), "backup written");
+    Ok(())
+}
+
+/// Replaces the database at `database_url` with the backup at `input` after
+/// verifying it. The server must be stopped first: it would keep using the old file.
+pub async fn restore(database_url: &str, input: &Path) -> anyhow::Result<()> {
+    let db_path = SqliteConnectOptions::from_str(database_url)
+        .context("invalid DATABASE_URL")?
+        .get_filename()
+        .to_path_buf();
+    if let Some(parent) = db_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("failed to create database directory {}", parent.display()))?;
+    }
+
+    let staging = with_suffix(&db_path, RESTORE_STAGING_SUFFIX);
+    tokio::fs::copy(input, &staging)
+        .await
+        .with_context(|| format!("failed to read backup {}", input.display()))?;
+    if let Err(err) = verify_backup(&staging).await {
+        remove_if_exists(&staging).await?;
+        return Err(err);
+    }
+
+    // A leftover WAL from the old database would be replayed into the restored one.
+    for suffix in [WAL_SUFFIX, SHM_SUFFIX] {
+        remove_if_exists(&with_suffix(&db_path, suffix)).await?;
+    }
+    tokio::fs::rename(&staging, &db_path)
+        .await
+        .with_context(|| format!("failed to move restored database to {}", db_path.display()))?;
+
+    tracing::info!(database = %db_path.display(), "database restored");
+    Ok(())
+}
+
+/// Accepts only an intact SQLite file that was created by ZeroBoard.
+async fn verify_backup(path: &Path) -> anyhow::Result<()> {
+    let mut conn: SqliteConnection = SqliteConnectOptions::new()
+        .filename(path)
+        .connect()
+        .await
+        .context("failed to open backup")?;
+
+    let integrity: String = sqlx::query_scalar("PRAGMA integrity_check")
+        .fetch_one(&mut conn)
+        .await
+        .context("backup is not a valid SQLite database")?;
+    anyhow::ensure!(integrity == INTEGRITY_CHECK_OK, "backup failed integrity check");
+
+    let migrations_tables: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .bind(MIGRATIONS_TABLE)
+            .fetch_one(&mut conn)
+            .await
+            .context("failed to inspect backup schema")?;
+    anyhow::ensure!(migrations_tables == 1, "backup is not a ZeroBoard database");
+
+    conn.close().await.context("failed to close backup")?;
+    Ok(())
+}
+
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = OsString::from(path.as_os_str());
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+async fn remove_if_exists(path: &Path) -> anyhow::Result<()> {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err).with_context(|| format!("failed to remove {}", path.display())),
+    }
 }
 
 #[cfg(test)]
@@ -373,5 +489,94 @@ mod tests {
         assert_eq!(count(&db.pool, "labels").await, 1);
 
         db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn backup_snapshots_live_database_and_refuses_overwrite() {
+        let db = TempDb::new().await;
+        seed_card_graph(&db.pool).await;
+        let output = db.dir.join("backups/snapshot.db");
+
+        backup(&db.url, &output).await.unwrap();
+
+        let snapshot = connect(&format!("sqlite://{}", output.display())).await.unwrap();
+        assert_eq!(count(&snapshot, "cards").await, 1);
+        assert_eq!(count(&snapshot, "users").await, 1);
+        snapshot.close().await;
+
+        let err = backup(&db.url, &output).await.unwrap_err();
+        assert!(err.to_string().contains("already exists"), "{err}");
+
+        db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn backup_fails_when_database_missing() {
+        let dir = std::env::temp_dir().join(format!("zeroboard-db-{}", uuid::Uuid::new_v4()));
+        let url = format!("sqlite://{}", dir.join("missing.db").display());
+        assert!(backup(&url, &dir.join("out.db")).await.is_err());
+        assert!(!dir.join("missing.db").exists());
+    }
+
+    #[tokio::test]
+    async fn restore_replaces_database_and_drops_stale_wal() {
+        let db = TempDb::new().await;
+        seed_card_graph(&db.pool).await;
+        let snapshot = db.dir.join("snapshot.db");
+        backup(&db.url, &snapshot).await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO users (id, email, name, password, created_at, updated_at) \
+             VALUES ('u2', 'after@backup.c', 'B', 'hash', 0, 0)",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
+        assert_eq!(count(&db.pool, "users").await, 2);
+        db.pool.close().await;
+        let db_path = db.dir.join("nested/test.db");
+        let stale_wal = with_suffix(&db_path, WAL_SUFFIX);
+        tokio::fs::write(&stale_wal, b"stale wal from the replaced database").await.unwrap();
+
+        restore(&db.url, &snapshot).await.unwrap();
+
+        assert!(!stale_wal.exists());
+        assert!(!with_suffix(&db_path, RESTORE_STAGING_SUFFIX).exists());
+        let restored = connect(&db.url).await.unwrap();
+        assert_eq!(count(&restored, "users").await, 1);
+        assert_eq!(count(&restored, "cards").await, 1);
+        restored.close().await;
+
+        let _ = tokio::fs::remove_dir_all(&db.dir).await;
+    }
+
+    #[tokio::test]
+    async fn restore_rejects_invalid_backups_and_keeps_database() {
+        let db = TempDb::new().await;
+        seed_card_graph(&db.pool).await;
+        db.pool.close().await;
+
+        let garbage = db.dir.join("garbage.db");
+        tokio::fs::write(&garbage, b"definitely not sqlite").await.unwrap();
+        let foreign = db.dir.join("foreign.db");
+        let foreign_pool = connect(&format!("sqlite://{}", foreign.display())).await.unwrap();
+        sqlx::query("CREATE TABLE other (id INTEGER)").execute(&foreign_pool).await.unwrap();
+        foreign_pool.close().await;
+
+        for (input, expected) in [
+            (&garbage, "not a valid SQLite database"),
+            (&foreign, "not a ZeroBoard database"),
+        ] {
+            let err = restore(&db.url, input).await.unwrap_err();
+            assert!(format!("{err:#}").contains(expected), "{}: {err:#}", input.display());
+        }
+
+        let db_path = db.dir.join("nested/test.db");
+        assert!(!with_suffix(&db_path, RESTORE_STAGING_SUFFIX).exists());
+        let kept = connect(&db.url).await.unwrap();
+        assert_eq!(count(&kept, "cards").await, 1);
+        kept.close().await;
+
+        let _ = tokio::fs::remove_dir_all(&db.dir).await;
     }
 }
