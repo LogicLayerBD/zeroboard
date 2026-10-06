@@ -15,6 +15,9 @@ pub enum AppError {
     Unauthorized,
     #[error("forbidden")]
     Forbidden,
+    /// 403 whose reason is safe and useful to show (e.g. "account is deactivated").
+    #[error("{0}")]
+    ForbiddenReason(String),
     #[error("{0}")]
     BadRequest(String),
     #[error("too many requests")]
@@ -47,6 +50,7 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
+            AppError::ForbiddenReason(reason) => (StatusCode::FORBIDDEN, reason.clone()),
             AppError::BadRequest(reason) => (StatusCode::BAD_REQUEST, reason.clone()),
             AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, self.to_string()),
@@ -96,6 +100,10 @@ mod tests {
         assert_eq!(
             render(AppError::BadRequest("title is required".into())).await,
             (StatusCode::BAD_REQUEST, json!({ "error": "title is required" }))
+        );
+        assert_eq!(
+            render(AppError::ForbiddenReason("account is deactivated".into())).await,
+            (StatusCode::FORBIDDEN, json!({ "error": "account is deactivated" }))
         );
         assert_eq!(
             render(AppError::TooManyRequests).await,

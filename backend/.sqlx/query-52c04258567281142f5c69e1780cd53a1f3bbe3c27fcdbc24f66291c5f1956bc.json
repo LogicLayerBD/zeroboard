@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS(SELECT 1 FROM users) AS \"has_users!: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "has_users!: bool",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "52c04258567281142f5c69e1780cd53a1f3bbe3c27fcdbc24f66291c5f1956bc"
+}

@@ -295,6 +295,7 @@ mod tests {
             max_attachment_size_mb: 25,
             app_name: "ZeroBoard".into(),
             first_user_is_admin: true,
+            registration_enabled: true,
         };
         AppState::new(db, read_db, config)
     }

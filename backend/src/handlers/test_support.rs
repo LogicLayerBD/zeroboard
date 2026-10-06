@@ -14,7 +14,7 @@ use crate::config::Config;
 use crate::AppState;
 
 const MAX_TEST_BODY_BYTES: usize = 1024 * 1024;
-const TEST_PASSWORD: &str = "correct-horse";
+pub const TEST_PASSWORD: &str = "correct-horse";
 const DEFAULT_MAX_ATTACHMENT_SIZE_MB: u64 = 25;
 
 pub struct TestUser {
@@ -51,6 +51,7 @@ impl TestApp {
             max_attachment_size_mb,
             app_name: "ZeroBoard".into(),
             first_user_is_admin: true,
+            registration_enabled: true,
         };
         let state = AppState::new(db, read_db, config);
         let app = crate::router(state.clone());

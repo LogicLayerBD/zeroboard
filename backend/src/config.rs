@@ -12,6 +12,8 @@ const DEFAULT_ATTACHMENTS_DIR: &str = "data/attachments";
 const DEFAULT_MAX_ATTACHMENT_SIZE_MB: u64 = 25;
 const DEFAULT_APP_NAME: &str = "ZeroBoard";
 const DEFAULT_FIRST_USER_IS_ADMIN: bool = true;
+/// When false, only admins create accounts (the very first account can always register).
+const DEFAULT_REGISTRATION_ENABLED: bool = true;
 
 /// 32 bytes is the minimum key length recommended for HMAC-SHA256 JWT signing.
 const MIN_JWT_SECRET_LEN: usize = 32;
@@ -40,6 +42,7 @@ pub struct Config {
     pub max_attachment_size_mb: u64,
     pub app_name: String,
     pub first_user_is_admin: bool,
+    pub registration_enabled: bool,
 }
 
 impl fmt::Debug for Config {
@@ -55,6 +58,7 @@ impl fmt::Debug for Config {
             .field("max_attachment_size_mb", &self.max_attachment_size_mb)
             .field("app_name", &self.app_name)
             .field("first_user_is_admin", &self.first_user_is_admin)
+            .field("registration_enabled", &self.registration_enabled)
             .finish()
     }
 }
@@ -116,6 +120,11 @@ impl Config {
                 "FIRST_USER_IS_ADMIN",
                 DEFAULT_FIRST_USER_IS_ADMIN,
             )?,
+            registration_enabled: parse_or(
+                &lookup,
+                "REGISTRATION_ENABLED",
+                DEFAULT_REGISTRATION_ENABLED,
+            )?,
         })
     }
 }
@@ -158,6 +167,7 @@ mod tests {
         assert_eq!(config.max_attachment_size_mb, DEFAULT_MAX_ATTACHMENT_SIZE_MB);
         assert_eq!(config.app_name, DEFAULT_APP_NAME);
         assert!(config.first_user_is_admin);
+        assert!(config.registration_enabled);
     }
 
     #[test]
@@ -168,11 +178,13 @@ mod tests {
             ("HOST", "127.0.0.1"),
             ("FIRST_USER_IS_ADMIN", "false"),
             ("MAX_ATTACHMENT_SIZE_MB", "10"),
+            ("REGISTRATION_ENABLED", "false"),
         ]))
         .unwrap();
         assert_eq!(config.port, 8080);
         assert_eq!(config.host.to_string(), "127.0.0.1");
         assert!(!config.first_user_is_admin);
+        assert!(!config.registration_enabled);
         assert_eq!(config.max_attachment_size_mb, 10);
     }
 

@@ -29,7 +29,11 @@
 			await signIn(email, password);
 			await goto('/', { replaceState: true });
 		} catch (err) {
-			error = api.errorMessage(err);
+			// 403 means registration is closed; the server explains what to do.
+			error =
+				err instanceof api.ApiError && err.status === 403 && err.message
+					? err.message
+					: api.errorMessage(err);
 		} finally {
 			submitting = false;
 		}

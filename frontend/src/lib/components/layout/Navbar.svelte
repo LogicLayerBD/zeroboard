@@ -5,6 +5,7 @@
 	import Logo from '$lib/components/ui/Logo.svelte';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import NotificationBell from '$lib/components/notifications/NotificationBell.svelte';
+	import ChangePasswordModal from './ChangePasswordModal.svelte';
 	import { currentUser, signOut } from '$lib/stores/auth.store';
 	import { sidebarOpen } from '$lib/stores/ui.store';
 	import { workspaceId, workspaces } from '$lib/stores/workspace.store';
@@ -13,6 +14,8 @@
 	async function switchWorkspace(id: string) {
 		await goto(id ? `/${encodeURIComponent(id)}` : '/');
 	}
+
+	let changingPassword = $state(false);
 
 	async function handleSignOut() {
 		await signOut();
@@ -84,6 +87,13 @@
 			<button
 				type="button"
 				class="icon-btn ml-1"
+				aria-label="Change password"
+				title="Change password"
+				onclick={() => (changingPassword = true)}><Icon name="key" class="h-4 w-4" /></button
+			>
+			<button
+				type="button"
+				class="icon-btn"
 				aria-label="Sign out"
 				title="Sign out"
 				onclick={handleSignOut}><Icon name="logout" class="h-4 w-4" /></button
@@ -91,3 +101,7 @@
 		{/if}
 	</div>
 </header>
+
+{#if changingPassword}
+	<ChangePasswordModal onclose={() => (changingPassword = false)} />
+{/if}

@@ -19,10 +19,12 @@
 		upsertWorkspace,
 		workspaceLoading
 	} from '$lib/stores/workspace.store';
-	import type { Member, WorkspaceRole } from '$lib/types';
+	import type { InviteCandidate, Member, WorkspaceRole } from '$lib/types';
 
 	const MAX_NAME_CHARS = 255;
 	const MAX_EMAIL_LEN = 254;
+	/** Wait for a pause in typing before asking the server for suggestions. */
+	const CANDIDATE_SEARCH_DEBOUNCE_MS = 200;
 	const ROLES: WorkspaceRole[] = ['admin', 'member', 'viewer'];
 	const DEFAULT_INVITE_ROLE: WorkspaceRole = 'member';
 	const ROLE_BADGE: Record<WorkspaceRole, string> = {
@@ -37,13 +39,52 @@
 	let renaming = $state(false);
 	let nameDraft = $state('');
 
+	let candidates = $state<InviteCandidate[]>([]);
+	let suggestionsOpen = $state(false);
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Ignores responses that arrive after a newer search was started. */
+	let latestSearch = 0;
+
 	const isAdmin = $derived($myRole === 'admin');
+	// Only instance admins may list accounts; others invite by exact email.
+	const canSuggest = $derived($currentUser?.role === 'admin');
+
+	function searchCandidates() {
+		const workspace = $currentWorkspace;
+		if (!canSuggest || !workspace) return;
+		clearTimeout(searchTimer);
+		const query = inviteEmail.trim();
+		const searchId = ++latestSearch;
+		searchTimer = setTimeout(async () => {
+			try {
+				const found = await api.inviteCandidates(workspace.id, query);
+				if (searchId !== latestSearch) return;
+				candidates = found;
+				suggestionsOpen = true;
+			} catch {
+				// Suggestions are a convenience; typing a full email still works.
+				if (searchId === latestSearch) candidates = [];
+			}
+		}, CANDIDATE_SEARCH_DEBOUNCE_MS);
+	}
+
+	function pickCandidate(candidate: InviteCandidate) {
+		inviteEmail = candidate.email;
+		closeSuggestions();
+	}
+
+	function closeSuggestions() {
+		clearTimeout(searchTimer);
+		latestSearch++;
+		suggestionsOpen = false;
+	}
 
 	async function invite(event: SubmitEvent) {
 		event.preventDefault();
 		const workspace = $currentWorkspace;
 		if (!workspace) return;
 		inviting = true;
+		closeSuggestions();
 		try {
 			const member = await api.inviteMember(workspace.id, inviteEmail.trim(), inviteRole);
 			upsertMember(member);
@@ -246,17 +287,62 @@
 					<form class="panel mt-4 p-5" onsubmit={invite}>
 						<p class="text-sm font-semibold text-slate-900 dark:text-white">Invite a teammate</p>
 						<p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-							Teammates need an account first: they register, then you add them by email.
+							{#if canSuggest}
+								Start typing a name or email to pick from registered users.
+							{:else}
+								Teammates need an account first: they register, then you add them by email.
+							{/if}
 						</p>
 						<div class="mt-4 flex flex-wrap gap-2">
-							<input
-								type="email"
-								class="input min-w-0 flex-1"
-								placeholder="teammate@example.com"
-								maxlength={MAX_EMAIL_LEN}
-								required
-								bind:value={inviteEmail}
-							/>
+							<div class="relative min-w-0 flex-1">
+								<input
+									type="email"
+									class="input w-full"
+									placeholder={canSuggest ? 'Name or email' : 'teammate@example.com'}
+									maxlength={MAX_EMAIL_LEN}
+									required
+									autocomplete="off"
+									role={canSuggest ? 'combobox' : undefined}
+									aria-expanded={canSuggest ? suggestionsOpen : undefined}
+									aria-controls={canSuggest ? 'invite-suggestions' : undefined}
+									bind:value={inviteEmail}
+									oninput={searchCandidates}
+									onfocus={searchCandidates}
+									onblur={closeSuggestions}
+									onkeydown={(e) => e.key === 'Escape' && closeSuggestions()}
+								/>
+								{#if suggestionsOpen && candidates.length > 0}
+									<ul
+										id="invite-suggestions"
+										role="listbox"
+										class="panel absolute inset-x-0 top-full z-10 mt-1 max-h-72 overflow-y-auto py-1 shadow-lift"
+									>
+										{#each candidates as candidate (candidate.user_id)}
+											<li role="option" aria-selected="false">
+												<!-- mousedown fires before the input's blur closes the list -->
+												<button
+													type="button"
+													class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60"
+													onmousedown={(e) => {
+														e.preventDefault();
+														pickCandidate(candidate);
+													}}
+												>
+													<Avatar name={candidate.name} color={candidate.avatar_color} />
+													<span class="min-w-0">
+														<span class="block truncate text-sm font-medium text-slate-900 dark:text-white"
+															>{candidate.name}</span
+														>
+														<span class="block truncate text-xs text-slate-500 dark:text-slate-400"
+															>{candidate.email}</span
+														>
+													</span>
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							</div>
 							<select class="input w-auto capitalize" aria-label="Role" bind:value={inviteRole}>
 								{#each ROLES as role (role)}
 									<option value={role}>{role}</option>

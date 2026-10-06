@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users\n         SET deactivated_at = CASE WHEN $1 IS NULL THEN NULL ELSE COALESCE(deactivated_at, $1) END,\n             updated_at = $2\n         WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "578265004573b55b220984901ac28b4c5de01c130aee8a0b7a89959e6258dd27"
+}

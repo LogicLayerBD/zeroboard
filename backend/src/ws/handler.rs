@@ -25,7 +25,7 @@ use tokio::time::{interval_at, sleep_until, timeout, Instant, MissedTickBehavior
 
 use super::events::{self, ClientEvent, WsEvent};
 use super::WsHub;
-use crate::auth::jwt;
+use crate::auth::{jwt, service as auth_service};
 use crate::errors::AppError;
 use crate::handlers::parse_id;
 use crate::models::WorkspaceRole;
@@ -101,6 +101,10 @@ async fn connect(
         tracing::debug!(error = %err, "ws access token rejected");
         AppError::Unauthorized
     })?;
+    if !auth_service::is_active(&state, &claims.sub).await? {
+        tracing::debug!(user_id = %claims.sub, "ws access token rejected: user deactivated or deleted");
+        return Err(AppError::Unauthorized);
+    }
     if !offered.contains(&WS_PROTOCOL) {
         return Err(AppError::BadRequest(MISSING_PROTOCOL_MESSAGE.to_string()));
     }
@@ -585,6 +589,40 @@ mod tests {
                 handshake_status(handshake(addr, &protocols, &[])).await,
                 StatusCode::UNAUTHORIZED,
                 "{protocols}"
+            );
+        }
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn rejects_tokens_of_deactivated_or_deleted_users() {
+        let t = TestApp::new().await;
+        let deactivated = t.user("deactivated@example.com").await;
+        let deleted = t.user("deleted@example.com").await;
+        let addr = serve(crate::router(t.state.clone())).await;
+        assert_eq!(
+            handshake_status(handshake(addr, &auth_protocols(&deactivated.token), &[])).await,
+            StatusCode::SWITCHING_PROTOCOLS
+        );
+
+        sqlx::query("UPDATE users SET deactivated_at = 1 WHERE id = $1")
+            .bind(&deactivated.id)
+            .execute(&t.state.db)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(&deleted.id)
+            .execute(&t.state.db)
+            .await
+            .unwrap();
+
+        for user in [&deactivated, &deleted] {
+            assert_eq!(
+                handshake_status(handshake(addr, &auth_protocols(&user.token), &[])).await,
+                StatusCode::UNAUTHORIZED,
+                "{}",
+                user.email
             );
         }
 

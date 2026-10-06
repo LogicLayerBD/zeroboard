@@ -28,11 +28,14 @@ const MAX_PASSWORD_BYTES: usize = 72;
 const MAX_NAME_CHARS: usize = 255;
 /// RFC 5321 maximum forward-path length.
 const MAX_EMAIL_LEN: usize = 254;
+const REGISTRATION_DISABLED_MESSAGE: &str =
+    "registration is disabled; ask an administrator to create your account";
 
 pub fn router(state: &AppState) -> Router<AppState> {
     let protected = Router::new()
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/me", get(me))
+        .route("/api/auth/password", post(change_password))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()
@@ -70,16 +73,7 @@ impl RegisterRequest {
                 "name must be at most {MAX_NAME_CHARS} characters"
             )));
         }
-        if self.password.chars().count() < MIN_PASSWORD_CHARS {
-            return Err(AppError::BadRequest(format!(
-                "password must be at least {MIN_PASSWORD_CHARS} characters"
-            )));
-        }
-        if self.password.len() > MAX_PASSWORD_BYTES {
-            return Err(AppError::BadRequest(format!(
-                "password must be at most {MAX_PASSWORD_BYTES} bytes"
-            )));
-        }
+        validate_new_password(&self.password)?;
         Ok(ValidRegistration {
             email,
             name: name.to_string(),
@@ -108,12 +102,51 @@ impl LoginRequest {
     }
 }
 
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    current_password: String,
+    new_password: String,
+}
+
+impl ChangePasswordRequest {
+    fn validate(self) -> Result<(String, String), AppError> {
+        // Over-long input can never match a stored hash; reject before doing bcrypt work.
+        if self.current_password.is_empty() || self.current_password.len() > MAX_PASSWORD_BYTES {
+            return Err(AppError::BadRequest(
+                service::CURRENT_PASSWORD_MESSAGE.to_string(),
+            ));
+        }
+        validate_new_password(&self.new_password)?;
+        Ok((self.current_password, self.new_password))
+    }
+}
+
+/// Same rules for registration and password changes.
+fn validate_new_password(password: &str) -> Result<(), AppError> {
+    if password.chars().count() < MIN_PASSWORD_CHARS {
+        return Err(AppError::BadRequest(format!(
+            "password must be at least {MIN_PASSWORD_CHARS} characters"
+        )));
+    }
+    if password.len() > MAX_PASSWORD_BYTES {
+        return Err(AppError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
 pub async fn register(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     body: Result<Json<RegisterRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     enforce_rate_limit(&state.register_limiter, addr.ip(), "register")?;
+    if !service::registration_open(&state).await? {
+        return Err(AppError::ForbiddenReason(
+            REGISTRATION_DISABLED_MESSAGE.to_string(),
+        ));
+    }
     let Json(body) = body?;
     let input = body.validate()?;
     let user = service::register(&state, &input.email, &input.name, &input.password).await?;
@@ -178,6 +211,25 @@ pub async fn me(
     Extension(auth_user): Extension<AuthUser>,
 ) -> Result<impl IntoResponse, AppError> {
     Ok(Json(service::current_user(&state, &auth_user.id).await?))
+}
+
+pub async fn change_password(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    headers: HeaderMap,
+    body: Result<Json<ChangePasswordRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, AppError> {
+    let Json(body) = body?;
+    let (current_password, new_password) = body.validate()?;
+    service::change_password(
+        &state,
+        &auth_user.id,
+        &current_password,
+        &new_password,
+        read_cookie(&headers, REFRESH_COOKIE_NAME),
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Uses the socket peer address only; proxy headers like X-Forwarded-For are not trusted.
@@ -276,6 +328,10 @@ mod tests {
         }
 
         async fn with_first_user_admin(first_user_is_admin: bool) -> Self {
+            Self::with_options(first_user_is_admin, true).await
+        }
+
+        async fn with_options(first_user_is_admin: bool, registration_enabled: bool) -> Self {
             let dir = std::env::temp_dir().join(format!("zeroboard-auth-{}", uuid::Uuid::new_v4()));
             let url = format!("sqlite://{}", dir.join("test.db").display());
             let db = crate::db::connect(&url).await.unwrap();
@@ -292,6 +348,7 @@ mod tests {
                 max_attachment_size_mb: 25,
                 app_name: "ZeroBoard".into(),
                 first_user_is_admin,
+                registration_enabled,
             };
             let state = AppState::new(db, read_db, config);
             let app = crate::router(state.clone());
@@ -423,6 +480,132 @@ mod tests {
             .unwrap();
         assert_ne!(stored, PASSWORD);
         assert!(bcrypt::verify(PASSWORD, &stored).unwrap());
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn disabled_registration_still_allows_the_first_account() {
+        let t = TestApp::with_options(true, false).await;
+
+        let (status, first) = t.register("first@example.com").await;
+        assert_eq!(status, StatusCode::CREATED, "bootstrap account: {first}");
+        assert_eq!(first["role"], "admin");
+
+        let (status, body) = t.register("second@example.com").await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["error"], REGISTRATION_DISABLED_MESSAGE);
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+            .fetch_one(&t.state.db)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn change_password_requires_current_and_signs_out_other_sessions() {
+        let t = TestApp::new().await;
+        t.register("a@example.com").await;
+        let (access, this_session) = t.login("a@example.com").await;
+        let (_, other_session) = t.login("a@example.com").await;
+        let change = |current: &str, new: &str| {
+            Request::post("/api/auth/password")
+                .header(AUTHORIZATION, format!("Bearer {access}"))
+                .header(COOKIE, format!("{REFRESH_COOKIE_NAME}={this_session}"))
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "current_password": current, "new_password": new }).to_string(),
+                ))
+                .unwrap()
+        };
+        const NEW_PASSWORD: &str = "a-brand-new-password";
+
+        let (status, _, body) = t.send(change("wrong-password", NEW_PASSWORD)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], service::CURRENT_PASSWORD_MESSAGE);
+        let (status, _, _) = t.send(change(PASSWORD, "short")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let oversized = "x".repeat(MAX_PASSWORD_BYTES + 1);
+        let (status, _, body) = t.send(change(&oversized, NEW_PASSWORD)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], service::CURRENT_PASSWORD_MESSAGE);
+        let (status, _, _) = t.send(change("", NEW_PASSWORD)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(t.refresh_with(&other_session).await.0, StatusCode::OK, "failed attempts revoke nothing");
+        let (_, other_session) = t.login("a@example.com").await;
+
+        let (status, _, _) = t.send(change(PASSWORD, NEW_PASSWORD)).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        assert_eq!(t.refresh_with(&other_session).await.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(t.refresh_with(&this_session).await.0, StatusCode::OK);
+        let (status, _, _) = t
+            .post_json("/api/auth/login", json!({ "email": "a@example.com", "password": PASSWORD }))
+            .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "old password no longer works");
+        let (status, _, _) = t
+            .post_json(
+                "/api/auth/login",
+                json!({ "email": "a@example.com", "password": NEW_PASSWORD }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn login_rejects_blank_and_oversized_credentials() {
+        let t = TestApp::new().await;
+        t.register("a@example.com").await;
+        let long_email = format!("{}@example.com", "a".repeat(MAX_EMAIL_LEN));
+        let long_password = "x".repeat(MAX_PASSWORD_BYTES + 1);
+        let cases = [
+            (json!({ "email": "", "password": PASSWORD }), StatusCode::BAD_REQUEST),
+            (json!({ "email": "a@example.com", "password": "" }), StatusCode::BAD_REQUEST),
+            // Over-long input is answered like a wrong password, without revealing why.
+            (json!({ "email": long_email, "password": PASSWORD }), StatusCode::UNAUTHORIZED),
+            (
+                json!({ "email": "a@example.com", "password": long_password }),
+                StatusCode::UNAUTHORIZED,
+            ),
+        ];
+        for (body, expected) in cases {
+            let (status, _, _) = t.post_json("/api/auth/login", body.clone()).await;
+            assert_eq!(status, expected, "{body}");
+        }
+        assert_eq!(t.refresh_token_count().await, 0);
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn deactivated_user_cannot_log_in_refresh_or_use_tokens() {
+        let t = TestApp::new().await;
+        t.register("a@example.com").await;
+        let (access, cookie) = t.login("a@example.com").await;
+        assert_eq!(t.get_me(Some(&access)).await.0, StatusCode::OK);
+
+        sqlx::query("UPDATE users SET deactivated_at = 1 WHERE email = 'a@example.com'")
+            .execute(&t.state.db)
+            .await
+            .unwrap();
+
+        assert_eq!(t.get_me(Some(&access)).await.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(t.refresh_with(&cookie).await.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(t.refresh_token_count().await, 0, "dead refresh token is deleted");
+        let (status, _, body) = t
+            .post_json("/api/auth/login", json!({ "email": "a@example.com", "password": PASSWORD }))
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(body["error"].as_str().unwrap().contains("deactivated"), "{body}");
+
+        // A wrong password must not reveal that the account exists but is deactivated.
+        let (status, _, _) = t
+            .post_json("/api/auth/login", json!({ "email": "a@example.com", "password": "wrong-pass" }))
+            .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
 
         t.cleanup().await;
     }

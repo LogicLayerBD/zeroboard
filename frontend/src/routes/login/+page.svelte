@@ -17,11 +17,14 @@
 			await signIn(email, password);
 			await goto('/', { replaceState: true });
 		} catch (err) {
-			// Never reveal whether the email exists.
-			error =
-				err instanceof ApiError && err.status === 401
-					? 'Invalid email or password.'
-					: errorMessage(err);
+			// Never reveal whether the email exists. 403 (deactivated) only follows a correct password.
+			if (err instanceof ApiError && err.status === 401) {
+				error = 'Invalid email or password.';
+			} else if (err instanceof ApiError && err.status === 403 && err.message) {
+				error = err.message;
+			} else {
+				error = errorMessage(err);
+			}
 		} finally {
 			submitting = false;
 		}

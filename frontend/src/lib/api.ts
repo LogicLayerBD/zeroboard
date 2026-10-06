@@ -1,4 +1,5 @@
 import type {
+	AdminUser,
 	Assignee,
 	Attachment,
 	Board,
@@ -8,16 +9,20 @@ import type {
 	CardDetails,
 	CardTimeEntries,
 	Comment,
+	CreatedUser,
+	InviteCandidate,
 	Label,
 	List,
 	LoggedTimeEntry,
 	Member,
 	Notification,
+	PasswordReset,
 	ServerInfo,
 	Session,
 	StorageUsage,
 	TokenRefresh,
 	User,
+	UserRole,
 	Workspace,
 	WorkspaceRole
 } from './types';
@@ -197,6 +202,16 @@ export function me(): Promise<User> {
 	return request('GET', `${AUTH_PREFIX}me`);
 }
 
+/** Signs out every other session; this one keeps working. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+	// Auth routes are never retried after a 401, so make sure the token is fresh first.
+	if (accessTokenExpiresSoon()) await refreshAccessToken();
+	return request('POST', `${AUTH_PREFIX}password`, {
+		current_password: currentPassword,
+		new_password: newPassword
+	});
+}
+
 // Workspaces
 
 export function listWorkspaces(): Promise<Workspace[]> {
@@ -225,6 +240,14 @@ export function inviteMember(
 	role: WorkspaceRole
 ): Promise<Member> {
 	return request('POST', `/api/workspaces/${seg(workspaceId)}/members/invite`, { email, role });
+}
+
+/** Instance admins only: active users who are not yet members, matching `query`. */
+export function inviteCandidates(workspaceId: string, query: string): Promise<InviteCandidate[]> {
+	return request(
+		'GET',
+		`/api/workspaces/${seg(workspaceId)}/members/candidates?q=${seg(query)}`
+	);
 }
 
 export function removeMember(workspaceId: string, userId: string): Promise<void> {
@@ -414,4 +437,28 @@ export function getServerInfo(): Promise<ServerInfo> {
 
 export function getStorageUsage(): Promise<StorageUsage> {
 	return request('GET', '/api/admin/storage');
+}
+
+export function listUsers(): Promise<AdminUser[]> {
+	return request('GET', '/api/admin/users');
+}
+
+export function createUser(email: string, name: string): Promise<CreatedUser> {
+	return request('POST', '/api/admin/users', { email, name });
+}
+
+export function setUserRole(id: string, role: UserRole): Promise<AdminUser> {
+	return request('PATCH', `/api/admin/users/${seg(id)}/role`, { role });
+}
+
+export function resetUserPassword(id: string): Promise<PasswordReset> {
+	return request('POST', `/api/admin/users/${seg(id)}/reset-password`);
+}
+
+export function deactivateUser(id: string): Promise<AdminUser> {
+	return request('POST', `/api/admin/users/${seg(id)}/deactivate`);
+}
+
+export function reactivateUser(id: string): Promise<AdminUser> {
+	return request('POST', `/api/admin/users/${seg(id)}/reactivate`);
 }

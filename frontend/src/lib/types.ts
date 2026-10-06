@@ -190,6 +190,35 @@ export interface StorageUsage {
 	workspaces: WorkspaceStorage[];
 }
 
+export interface AdminUser {
+	id: string;
+	email: string;
+	name: string;
+	avatar_color: string;
+	role: UserRole;
+	created_at: number;
+	/** `null` while the account is active. */
+	deactivated_at: number | null;
+	workspace_count: number;
+}
+
+export interface CreatedUser {
+	user: AdminUser;
+	/** Shown once; the server keeps only a hash. */
+	temporary_password: string;
+}
+
+export interface PasswordReset {
+	temporary_password: string;
+}
+
+export interface InviteCandidate {
+	user_id: string;
+	name: string;
+	email: string;
+	avatar_color: string;
+}
+
 export type ServerEvent =
 	| { type: 'CARD_CREATED'; payload: { card: Card } }
 	| { type: 'CARD_UPDATED'; payload: { card: Card } }

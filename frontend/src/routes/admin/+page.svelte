@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as api from '$lib/api';
+	import UsersPanel from '$lib/components/admin/UsersPanel.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { formatBytes } from '$lib/format';
 	import { currentUser } from '$lib/stores/auth.store';
@@ -51,6 +52,8 @@
 				</div>
 			{/each}
 		</section>
+
+		<UsersPanel />
 
 		<section class="mt-10">
 			<h2 class="section-title mb-3">

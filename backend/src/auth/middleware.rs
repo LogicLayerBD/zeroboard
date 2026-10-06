@@ -4,7 +4,7 @@ use axum::http::HeaderMap;
 use axum::middleware::Next;
 use axum::response::Response;
 
-use crate::auth::jwt;
+use crate::auth::{jwt, service};
 use crate::errors::AppError;
 use crate::AppState;
 
@@ -26,6 +26,10 @@ pub async fn require_auth(
         tracing::debug!(error = %err, "access token rejected");
         AppError::Unauthorized
     })?;
+    if !service::is_active(&state, &claims.sub).await? {
+        tracing::debug!(user_id = %claims.sub, "access token rejected: user deactivated or deleted");
+        return Err(AppError::Unauthorized);
+    }
     req.extensions_mut().insert(AuthUser { id: claims.sub });
     Ok(next.run(req).await)
 }

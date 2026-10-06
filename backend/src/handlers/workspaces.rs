@@ -1,5 +1,5 @@
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{Path, State};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, patch, post};
@@ -11,13 +11,15 @@ use super::{parse_id, validate_name};
 use crate::auth::{require_auth, AuthUser};
 use crate::errors::AppError;
 use crate::models::WorkspaceRole;
-use crate::services::access::require_workspace_role;
+use crate::services::access::{require_global_admin, require_workspace_role};
 use crate::services::workspaces;
 use crate::AppState;
 
 const WORKSPACE_ID_FIELD: &str = "workspace id";
 const USER_ID_FIELD: &str = "user id";
 const DEFAULT_INVITE_ROLE: WorkspaceRole = WorkspaceRole::Member;
+/// Longest valid email address; nothing longer can match a user.
+const MAX_CANDIDATE_QUERY_CHARS: usize = 254;
 
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
@@ -31,6 +33,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
         )
         .route("/api/workspaces/:id/members", get(list_members))
         .route("/api/workspaces/:id/members/invite", post(invite_member))
+        .route(
+            "/api/workspaces/:id/members/candidates",
+            get(invite_candidates),
+        )
         .route(
             "/api/workspaces/:id/members/:user_id",
             delete(remove_member),
@@ -67,6 +73,22 @@ impl InviteMemberRequest {
 #[derive(Deserialize)]
 pub struct ChangeRoleRequest {
     role: WorkspaceRole,
+}
+
+#[derive(Deserialize)]
+pub struct CandidatesQuery {
+    #[serde(default)]
+    q: String,
+}
+
+impl CandidatesQuery {
+    fn validate(self) -> Result<String, AppError> {
+        let q = self.q.trim();
+        if q.chars().count() > MAX_CANDIDATE_QUERY_CHARS {
+            return Err(AppError::BadRequest("search is too long".into()));
+        }
+        Ok(q.to_string())
+    }
 }
 
 pub async fn create_workspace(
@@ -137,6 +159,23 @@ pub async fn invite_member(
     require_workspace_role(&state, &workspace_id, &auth_user.id, WorkspaceRole::Admin).await?;
     let member = workspaces::invite(&state, &workspace_id, &email, role).await?;
     Ok((StatusCode::CREATED, Json(member)))
+}
+
+/// Instance admins only: listing accounts would otherwise leak who is registered.
+pub async fn invite_candidates(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    Path(id): Path<String>,
+    query: Result<Query<CandidatesQuery>, QueryRejection>,
+) -> Result<impl IntoResponse, AppError> {
+    let workspace_id = parse_id(&id, WORKSPACE_ID_FIELD)?;
+    let Query(query) = query.map_err(|_| AppError::BadRequest("search is invalid".into()))?;
+    let q = query.validate()?;
+    require_workspace_role(&state, &workspace_id, &auth_user.id, WorkspaceRole::Admin).await?;
+    require_global_admin(&state, &auth_user.id).await?;
+    Ok(Json(
+        workspaces::invite_candidates(&state, &workspace_id, &q).await?,
+    ))
 }
 
 pub async fn remove_member(
@@ -541,6 +580,68 @@ mod tests {
         );
         let (_, listed) = t.get("/api/workspaces", &alice).await;
         assert_eq!(listed, json!([]));
+
+        t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn invite_candidates_lists_active_non_members_for_instance_admins_only() {
+        let t = TestApp::new().await;
+        let alice = t.user("alice@example.com").await; // first user: instance admin
+        let bob = t.user("bob@example.com").await;
+        t.user("carol@example.com").await;
+        t.user("dave@example.com").await;
+        t.user("rxs@example.com").await;
+        t.user("under_score@example.com").await;
+        let ws = t.workspace(&alice, "W").await;
+        t.add_member(&ws, &alice, &bob, "member").await;
+        let search = |q: &str| format!("/api/workspaces/{ws}/members/candidates?q={q}");
+        let emails = |body: &Value| -> Vec<String> {
+            body.as_array()
+                .unwrap()
+                .iter()
+                .map(|c| c["email"].as_str().unwrap().to_string())
+                .collect()
+        };
+
+        let (status, all) = t.get(&search(""), &alice).await;
+        assert_eq!(status, StatusCode::OK, "{all}");
+        assert_eq!(
+            emails(&all),
+            [
+                "carol@example.com",
+                "dave@example.com",
+                "rxs@example.com",
+                "under_score@example.com"
+            ],
+            "members are excluded"
+        );
+        assert!(all[0].get("password").is_none());
+
+        assert_eq!(emails(&t.get(&search("CAR"), &alice).await.1), ["carol@example.com"]);
+        // `_` and `%` are literal, not LIKE wildcards.
+        assert_eq!(
+            emails(&t.get(&search("r_s"), &alice).await.1),
+            ["under_score@example.com"]
+        );
+        assert!(emails(&t.get(&search("%25"), &alice).await.1).is_empty());
+
+        sqlx::query("UPDATE users SET deactivated_at = 1 WHERE email = 'dave@example.com'")
+            .execute(&t.state.db)
+            .await
+            .unwrap();
+        assert!(emails(&t.get(&search("dave"), &alice).await.1).is_empty());
+
+        let too_long = "a".repeat(MAX_CANDIDATE_QUERY_CHARS + 1);
+        assert_eq!(t.get(&search(&too_long), &alice).await.0, StatusCode::BAD_REQUEST);
+
+        // A workspace admin who is not an instance admin cannot enumerate accounts.
+        let bob_ws = t.workspace(&bob, "Bob's").await;
+        let bob_uri = format!("/api/workspaces/{bob_ws}/members/candidates?q=");
+        assert_eq!(t.get(&bob_uri, &bob).await.0, StatusCode::FORBIDDEN);
+        // Instance admins still need workspace-admin rights in that workspace.
+        assert_eq!(t.get(&bob_uri, &alice).await.0, StatusCode::FORBIDDEN);
+        assert_eq!(t.get(&search("x"), &bob).await.0, StatusCode::FORBIDDEN);
 
         t.cleanup().await;
     }

@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.id AS \"id!\", u.email, u.name, u.avatar_color, u.role AS \"role: UserRole\",\n                  u.created_at, u.deactivated_at AS \"deactivated_at?\",\n                  (SELECT COUNT(*) FROM workspace_members m WHERE m.user_id = u.id)\n                      AS \"workspace_count!: i64\"\n           FROM users u\n           ORDER BY u.created_at, u.id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "email",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "avatar_color",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "role: UserRole",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Int64"
+      },
+      {
+        "name": "deactivated_at?",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "workspace_count!: i64",
+        "ordinal": 7,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "7069396b2d276299d1d5ab0c9436cb237bd3cac9368d72baf84499183fe81606"
+}

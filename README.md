@@ -108,6 +108,9 @@ See `.env.example` for all options. Required:
 - `JWT_SECRET` — long random string (generate with `openssl rand -hex 32`)
 - `DATABASE_URL` — defaults to `sqlite://data/zeroboard.db`
 
+Optional: `REGISTRATION_ENABLED=false` closes public sign-up once the first (admin) account
+exists. Admins then add people from **Admin → Users**, which shows a one-time temporary password.
+
 
 
 ### Reverse Proxy (Nginx)

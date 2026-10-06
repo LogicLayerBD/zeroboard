@@ -103,6 +103,11 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 - [ ] Manage workspace members (invite, remove, change role)
 - [ ] View storage usage (attachment sizes)
 - [ ] Server info (version, uptime, DB size)
+- [ ] Users list (search, workspace count, joined date) with create user (temporary password)
+- [ ] Change a user's instance role; reset a user's password; deactivate / reactivate
+- [ ] Invite autocomplete for instance admins
+- [ ] Optional: disable open registration (`REGISTRATION_ENABLED=false`)
+- [ ] Every user can change their own password
 
 ---
 
@@ -110,7 +115,12 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 
 ## Out of Scope for V1 (Do Not Build)
 
-- Email notifications (SMTP)
+- Email notifications (SMTP) — planned for v1.1:
+  - SMTP settings via env vars only (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`);
+    the admin panel shows status and a "send test email" button but never stores credentials
+  - Outbound mail through a SQLite-backed job queue (retry with backoff, timeout, stuck-job reaper)
+  - First emails: password-reset links (replacing temporary passwords) and invites;
+    then notification emails with per-user preferences and an optional daily digest
 - Calendar view
 - Gantt / Timeline view
 - Public boards
@@ -145,6 +155,9 @@ CREATE TABLE users (
 -- 0002_add_user_role.sql: instance-wide role (first registered user is admin
 -- when FIRST_USER_IS_ADMIN=true). Workspace permissions stay in workspace_members.role.
 ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin','member'));
+
+-- 0003_add_user_deactivated_at.sql: NULL = active, otherwise Unix ms of deactivation.
+ALTER TABLE users ADD COLUMN deactivated_at INTEGER;
 ```
 
 
@@ -386,11 +399,14 @@ POST   /api/auth/login
 POST   /api/auth/logout
 POST   /api/auth/refresh
 GET    /api/auth/me
+POST   /api/auth/password   -- {current_password, new_password} → 204; signs out other sessions
 ```
 
 - Refresh cookie: `refresh_token=<refresh_tokens.id>.<64-hex secret>`; `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`.
   Only a bcrypt hash of the secret is stored; the id locates the row. Tokens rotate on every refresh.
 - Login: max 10 attempts per IP per 15 min. Register: max 5 per IP per hour (429 when exceeded).
+- Register returns 403 when `REGISTRATION_ENABLED=false` and at least one user exists.
+- Deactivated users: login → 403 (after password check), refresh → 401, access tokens and WS → 401.
 
 
 
@@ -407,6 +423,9 @@ DELETE /api/workspaces/:id
 
 GET    /api/workspaces/:id/members
 POST   /api/workspaces/:id/members/invite
+GET    /api/workspaces/:id/members/candidates?q=
+- Invite autocomplete: up to 10 active non-members matching name/email
+- Requires workspace admin AND instance admin (it reveals who has an account)
 DELETE /api/workspaces/:id/members/:userId
 PATCH  /api/workspaces/:id/members/:userId/role
 ```
@@ -511,7 +530,18 @@ POST   /api/notifications/read-all
 ```
 GET    /api/admin/info
 GET    /api/admin/storage
+GET    /api/admin/users                      -- all users + workspace_count, deactivated_at
+POST   /api/admin/users                      -- {email, name} → {user, temporary_password}
+PATCH  /api/admin/users/:id/role             -- {role: admin|member}
+POST   /api/admin/users/:id/reset-password   -- → {temporary_password}; revokes sessions
+POST   /api/admin/users/:id/deactivate       -- blocks login, revokes sessions
+POST   /api/admin/users/:id/reactivate
 ```
+
+- All require instance admin (403 otherwise). An admin cannot change their own role,
+  deactivate themselves, or reset their own password (use `POST /api/auth/password`),
+  so at least one active admin always remains.
+- Temporary passwords are 16 random alphanumeric characters, returned once and never logged.
 
 
 
@@ -658,6 +688,7 @@ MAX_ATTACHMENT_SIZE_MB=25
 # App
 APP_NAME=ZeroBoard
 FIRST_USER_IS_ADMIN=true
+REGISTRATION_ENABLED=true   # false: only instance admins create accounts (first account always allowed)
 ```
 
 ---

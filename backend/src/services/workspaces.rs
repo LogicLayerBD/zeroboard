@@ -8,7 +8,11 @@ use crate::ws::events;
 use crate::AppState;
 
 const USER_NOT_FOUND_MESSAGE: &str = "no user is registered with that email";
+const USER_DEACTIVATED_MESSAGE: &str = "that user is deactivated";
 const ALREADY_MEMBER_MESSAGE: &str = "user is already a member of this workspace";
+/// Keeps the invite autocomplete dropdown short.
+const MAX_INVITE_CANDIDATES: i64 = 10;
+const LIKE_ESCAPE_CHAR: char = '\\';
 const LAST_ADMIN_REMOVE_MESSAGE: &str = "cannot remove the last admin of a workspace";
 const LAST_ADMIN_DEMOTE_MESSAGE: &str = "cannot demote the last admin of a workspace";
 
@@ -132,10 +136,16 @@ pub async fn invite(
     email: &str,
     role: WorkspaceRole,
 ) -> Result<MemberDetails, AppError> {
-    let user = sqlx::query!(r#"SELECT id AS "id!" FROM users WHERE email = $1"#, email)
-        .fetch_optional(&state.read_db)
-        .await?
-        .ok_or_else(|| AppError::BadRequest(USER_NOT_FOUND_MESSAGE.to_string()))?;
+    let user = sqlx::query!(
+        r#"SELECT id AS "id!", deactivated_at AS "deactivated_at?" FROM users WHERE email = $1"#,
+        email
+    )
+    .fetch_optional(&state.read_db)
+    .await?
+    .ok_or_else(|| AppError::BadRequest(USER_NOT_FOUND_MESSAGE.to_string()))?;
+    if user.deactivated_at.is_some() {
+        return Err(AppError::BadRequest(USER_DEACTIVATED_MESSAGE.to_string()));
+    }
 
     let now = now_ms();
     let inserted = sqlx::query!(
@@ -166,6 +176,56 @@ pub async fn invite(
             .broadcast_to_board_all(&board_id, &events::member_joined(&member, &board_id));
     }
     Ok(member)
+}
+
+/// An active user who could be invited to a workspace.
+#[derive(Debug, Serialize)]
+pub struct InviteCandidate {
+    pub user_id: String,
+    pub name: String,
+    pub email: String,
+    pub avatar_color: String,
+}
+
+/// Active non-members whose name or email contains `query` (case-insensitive for ASCII).
+/// Callers must restrict this to instance admins: it reveals who has an account.
+pub async fn invite_candidates(
+    state: &AppState,
+    workspace_id: &str,
+    query: &str,
+) -> Result<Vec<InviteCandidate>, AppError> {
+    let pattern = format!("%{}%", escape_like(query));
+    let candidates = sqlx::query_as!(
+        InviteCandidate,
+        r#"SELECT u.id AS "user_id!", u.name, u.email, u.avatar_color
+           FROM users u
+           WHERE u.deactivated_at IS NULL
+             AND (u.name LIKE $2 ESCAPE '\' OR u.email LIKE $2 ESCAPE '\')
+             AND NOT EXISTS (
+                 SELECT 1 FROM workspace_members m
+                 WHERE m.workspace_id = $1 AND m.user_id = u.id
+             )
+           ORDER BY u.name COLLATE NOCASE, u.email
+           LIMIT $3"#,
+        workspace_id,
+        pattern,
+        MAX_INVITE_CANDIDATES
+    )
+    .fetch_all(&state.read_db)
+    .await?;
+    Ok(candidates)
+}
+
+/// Makes `%`, `_` and the escape character match literally inside a LIKE pattern.
+fn escape_like(raw: &str) -> String {
+    let mut escaped = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        if matches!(c, '%' | '_') || c == LIKE_ESCAPE_CHAR {
+            escaped.push(LIKE_ESCAPE_CHAR);
+        }
+        escaped.push(c);
+    }
+    escaped
 }
 
 /// Refuses to remove the workspace's only admin.
@@ -311,5 +371,17 @@ async fn explain_unchanged_member(
         }
         Ok(None) => AppError::NotFound,
         Err(err) => err.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_like;
+
+    #[test]
+    fn escape_like_makes_wildcards_literal() {
+        assert_eq!(escape_like("alice"), "alice");
+        assert_eq!(escape_like("100%_done"), r"100\%\_done");
+        assert_eq!(escape_like(r"back\slash"), r"back\\slash");
     }
 }
