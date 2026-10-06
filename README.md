@@ -186,6 +186,9 @@ If you use a downloaded binary, point them at it with `ZEROBOARD_BIN=./zeroboard
 # Safe while the server is running; deletes archives older than KEEP_DAYS (default 14).
 scripts/backup.sh
 
+# Keep every archive (useful for occasional manual backups)
+KEEP_DAYS=0 scripts/backup.sh
+
 # Stops the service, archives the current data as zeroboard-pre-restore-*.tar.gz,
 # restores the archive, and starts the service again.
 scripts/restore.sh backups/zeroboard-20260101-030000.tar.gz
