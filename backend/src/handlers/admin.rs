@@ -12,7 +12,7 @@ use crate::auth::{require_auth, AuthUser};
 use crate::errors::AppError;
 use crate::models::UserRole;
 use crate::services::access::require_global_admin;
-use crate::services::{admin, users};
+use crate::services::{admin, settings, users};
 use crate::AppState;
 
 const USER_ID_FIELD: &str = "user id";
@@ -21,6 +21,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/api/admin/info", get(server_info))
         .route("/api/admin/storage", get(storage_usage))
+        .route("/api/admin/settings", get(get_settings).patch(update_settings))
         .route("/api/admin/users", get(list_users).post(create_user))
         .route("/api/admin/users/:id/role", patch(change_user_role))
         .route("/api/admin/users/:id/reset-password", post(reset_password))
@@ -50,6 +51,11 @@ pub struct ChangeUserRoleRequest {
     role: UserRole,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateSettingsRequest {
+    registration_enabled: bool,
+}
+
 pub async fn server_info(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthUser>,
@@ -64,6 +70,27 @@ pub async fn storage_usage(
 ) -> Result<impl IntoResponse, AppError> {
     require_global_admin(&state, &auth_user.id).await?;
     Ok(Json(admin::storage_usage(&state).await?))
+}
+
+pub async fn get_settings(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+) -> Result<impl IntoResponse, AppError> {
+    require_global_admin(&state, &auth_user.id).await?;
+    Ok(Json(settings::get(&state).await?))
+}
+
+pub async fn update_settings(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    body: Result<Json<UpdateSettingsRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, AppError> {
+    let Json(body) = body?;
+    require_global_admin(&state, &auth_user.id).await?;
+    Ok(Json(
+        settings::set_registration_enabled(&state, &auth_user.id, body.registration_enabled)
+            .await?,
+    ))
 }
 
 pub async fn list_users(
@@ -252,6 +279,37 @@ mod tests {
             usage["workspaces"][0],
             json!({ "workspace_id": null, "workspace_name": null, "attachment_count": 1, "size_bytes": 400 })
         );
+
+        f.t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn settings_are_instance_admin_only_and_validated() {
+        let f = BoardFixture::new().await;
+
+        let (status, settings) = f.t.get("/api/admin/settings", &f.admin).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(settings, json!({ "registration_enabled": true }), "env default");
+
+        let off = json!({ "registration_enabled": false });
+        for user in [&f.member, &f.viewer, &f.outsider] {
+            assert_eq!(f.t.get("/api/admin/settings", user).await.0, StatusCode::FORBIDDEN);
+            let (status, _) = f.t.patch("/api/admin/settings", user, off.clone()).await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+        }
+        let (_, unchanged) = f.t.get("/api/admin/settings", &f.admin).await;
+        assert_eq!(unchanged["registration_enabled"], true, "rejected writes change nothing");
+
+        for bad in [json!({}), json!({ "registration_enabled": "no" })] {
+            let (status, _) = f.t.patch("/api/admin/settings", &f.admin, bad.clone()).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+        }
+
+        let (status, saved) = f.t.patch("/api/admin/settings", &f.admin, off).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(saved["registration_enabled"], false);
+        let (_, reloaded) = f.t.get("/api/admin/settings", &f.admin).await;
+        assert_eq!(reloaded["registration_enabled"], false, "persisted");
 
         f.t.cleanup().await;
     }

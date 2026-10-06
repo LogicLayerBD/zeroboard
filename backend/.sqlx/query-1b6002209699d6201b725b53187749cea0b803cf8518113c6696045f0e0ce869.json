@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO instance_settings (id, registration_enabled, updated_at) VALUES ($1, $2, $3)\n         ON CONFLICT (id) DO UPDATE SET registration_enabled = excluded.registration_enabled,\n                                        updated_at = excluded.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "1b6002209699d6201b725b53187749cea0b803cf8518113c6696045f0e0ce869"
+}

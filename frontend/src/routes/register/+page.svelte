@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import * as api from '$lib/api';
 	import AuthCard from '$lib/components/layout/AuthCard.svelte';
+	import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
 	import { signIn } from '$lib/stores/auth.store';
 
 	/** Mirrors the backend limits so most mistakes are caught before a round trip. */
@@ -15,6 +16,15 @@
 	let password = $state('');
 	let error = $state('');
 	let submitting = $state(false);
+	let closed = $state(false);
+
+	$effect(() => {
+		// On error keep the form: the server still enforces the setting on submit.
+		api
+			.registrationOpen()
+			.then((open) => (closed = !open))
+			.catch(() => (closed = false));
+	});
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
@@ -43,6 +53,13 @@
 <svelte:head><title>Create account · ZeroBoard</title></svelte:head>
 
 <AuthCard title="Create your account">
+	{#if closed}
+		<p
+			class="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-200 dark:ring-slate-700"
+		>
+			Sign-up is closed on this server. Ask an administrator to create your account.
+		</p>
+	{:else}
 	<form class="space-y-5" onsubmit={submit}>
 		<label class="block">
 			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Name</span>
@@ -67,12 +84,10 @@
 		</label>
 		<label class="block">
 			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Password</span>
-			<input
-				type="password"
+			<PasswordInput
 				autocomplete="new-password"
 				required
 				minlength={MIN_PASSWORD_CHARS}
-				class="input w-full py-2.5"
 				bind:value={password}
 			/>
 			<span class="mt-1 block text-xs text-slate-400 dark:text-slate-500">At least {MIN_PASSWORD_CHARS} characters.</span>
@@ -86,6 +101,7 @@
 			disabled={submitting}>{submitting ? 'Creating account…' : 'Create account'}</button
 		>
 	</form>
+	{/if}
 	<p class="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
 		Already have an account? <a href="/login" class="link"
 			>Sign in</a

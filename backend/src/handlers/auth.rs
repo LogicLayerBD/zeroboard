@@ -42,6 +42,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/api/auth/register", post(register))
         .route("/api/auth/login", post(login))
         .route("/api/auth/refresh", post(refresh))
+        .route("/api/auth/registration", get(registration_status))
         .merge(protected)
 }
 
@@ -151,6 +152,12 @@ pub async fn register(
     let input = body.validate()?;
     let user = service::register(&state, &input.email, &input.name, &input.password).await?;
     Ok((StatusCode::CREATED, Json(user)))
+}
+
+/// Public: lets the sign-in page hide "Create account" when sign-up is closed.
+/// Reveals nothing a register attempt would not.
+pub async fn registration_status(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+    Ok(Json(json!({ "open": service::registration_open(&state).await? })))
 }
 
 pub async fn login(
@@ -436,6 +443,15 @@ mod tests {
             (status, body)
         }
 
+        /// Unauthenticated, like the sign-in page.
+        async fn registration_open(&self) -> bool {
+            let (status, _, body) = self
+                .send(Request::get("/api/auth/registration").body(Body::empty()).unwrap())
+                .await;
+            assert_eq!(status, StatusCode::OK);
+            body["open"].as_bool().unwrap()
+        }
+
         async fn refresh_token_count(&self) -> i64 {
             sqlx::query_scalar("SELECT COUNT(*) FROM refresh_tokens")
                 .fetch_one(&self.state.db)
@@ -488,8 +504,10 @@ mod tests {
     async fn disabled_registration_still_allows_the_first_account() {
         let t = TestApp::with_options(true, false).await;
 
+        assert!(t.registration_open().await, "an empty instance always accepts the first account");
         let (status, first) = t.register("first@example.com").await;
         assert_eq!(status, StatusCode::CREATED, "bootstrap account: {first}");
+        assert!(!t.registration_open().await);
         assert_eq!(first["role"], "admin");
 
         let (status, body) = t.register("second@example.com").await;
@@ -502,6 +520,42 @@ mod tests {
         assert_eq!(count, 1);
 
         t.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn admin_registration_toggle_overrides_the_env_default() {
+        for env_default in [true, false] {
+            let t = TestApp::with_options(true, env_default).await;
+            t.register("admin@example.com").await;
+            let (admin_token, _) = t.login("admin@example.com").await;
+            let set_registration = |enabled: bool| {
+                Request::patch("/api/admin/settings")
+                    .header(AUTHORIZATION, format!("Bearer {admin_token}"))
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "registration_enabled": enabled }).to_string()))
+                    .unwrap()
+            };
+
+            let expected = if env_default { StatusCode::CREATED } else { StatusCode::FORBIDDEN };
+            assert_eq!(t.register("a@example.com").await.0, expected, "env default {env_default}");
+            assert_eq!(t.registration_open().await, env_default);
+
+            let (status, _, settings) = t.send(set_registration(false)).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(settings["registration_enabled"], false);
+            assert!(!t.registration_open().await);
+            let (status, body) = t.register("b@example.com").await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            assert_eq!(body["error"], REGISTRATION_DISABLED_MESSAGE);
+
+            let (status, _, settings) = t.send(set_registration(true)).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(settings["registration_enabled"], true);
+            assert!(t.registration_open().await);
+            assert_eq!(t.register("b@example.com").await.0, StatusCode::CREATED);
+
+            t.cleanup().await;
+        }
     }
 
     #[tokio::test]

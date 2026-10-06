@@ -29,6 +29,8 @@ const PROTECTED_ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/auth/password"),
     ("GET", "/api/admin/info"),
     ("GET", "/api/admin/storage"),
+    ("GET", "/api/admin/settings"),
+    ("PATCH", "/api/admin/settings"),
     ("GET", "/api/admin/users"),
     ("POST", "/api/admin/users"),
     ("PATCH", "/api/admin/users/:id/role"),

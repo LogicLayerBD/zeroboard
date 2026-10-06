@@ -108,8 +108,10 @@ See `.env.example` for all options. Required:
 - `JWT_SECRET` — long random string (generate with `openssl rand -hex 32`)
 - `DATABASE_URL` — defaults to `sqlite://data/zeroboard.db`
 
-Optional: `REGISTRATION_ENABLED=false` closes public sign-up once the first (admin) account
-exists. Admins then add people from **Admin → Users**, which shows a one-time temporary password.
+Public sign-up can be switched off any time with the **Public sign-up** toggle in
+**Admin → Users** (no restart). Admins then add people with **Add a user**, which shows a one-time
+temporary password. `REGISTRATION_ENABLED=false` sets the default before the toggle is first used;
+the first (admin) account can always register.
 
 
 

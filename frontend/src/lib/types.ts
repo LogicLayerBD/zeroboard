@@ -190,6 +190,11 @@ export interface StorageUsage {
 	workspaces: WorkspaceStorage[];
 }
 
+export interface InstanceSettings {
+	/** The first account can always register, whatever this says. */
+	registration_enabled: boolean;
+}
+
 export interface AdminUser {
 	id: string;
 	email: string;

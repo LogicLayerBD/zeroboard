@@ -11,6 +11,7 @@ use crate::auth::{jwt, BCRYPT_COST};
 use crate::db;
 use crate::errors::AppError;
 use crate::models::{RefreshToken, User, UserRole};
+use crate::services::settings;
 use crate::AppState;
 
 const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
@@ -258,9 +259,10 @@ pub async fn is_active(state: &AppState, user_id: &str) -> Result<bool, AppError
     Ok(matches!(deactivated_at, Some(None)))
 }
 
-/// Open registration, or bootstrap: the first account can always be created.
+/// Open registration (admin setting, else env default), or bootstrap: the first
+/// account can always be created.
 pub async fn registration_open(state: &AppState) -> Result<bool, AppError> {
-    if state.config.registration_enabled {
+    if settings::registration_enabled(state).await? {
         return Ok(true);
     }
     let has_users =

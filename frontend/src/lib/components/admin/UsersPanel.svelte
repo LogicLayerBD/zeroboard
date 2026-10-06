@@ -12,6 +12,8 @@
 	const ROLES: UserRole[] = ['admin', 'member'];
 
 	let users = $state<AdminUser[]>([]);
+	let registrationEnabled = $state<boolean | null>(null);
+	let savingRegistration = $state(false);
 	let search = $state('');
 	let newName = $state('');
 	let newEmail = $state('');
@@ -30,7 +32,25 @@
 			.listUsers()
 			.then((list) => (users = list))
 			.catch(toastError);
+		api
+			.getSettings()
+			.then((settings) => (registrationEnabled = settings.registration_enabled))
+			.catch(toastError);
 	});
+
+	async function toggleRegistration() {
+		if (registrationEnabled === null) return;
+		savingRegistration = true;
+		try {
+			const settings = await api.setRegistrationEnabled(!registrationEnabled);
+			registrationEnabled = settings.registration_enabled;
+			toastSuccess(registrationEnabled ? 'Public sign-up is on.' : 'Public sign-up is off.');
+		} catch (err) {
+			toastError(err);
+		} finally {
+			savingRegistration = false;
+		}
+	}
 
 	function replace(updated: AdminUser) {
 		users = users.map((u) => (u.id === updated.id ? updated : u));
@@ -108,6 +128,36 @@
 			bind:value={search}
 		/>
 	</div>
+
+	{#if registrationEnabled !== null}
+		<div class="panel mb-4 flex items-center gap-4 p-4">
+			<div class="min-w-0 flex-1">
+				<p class="text-sm font-semibold text-slate-900 dark:text-white">Public sign-up</p>
+				<p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+					{registrationEnabled
+						? 'Anyone who can reach this site can create an account.'
+						: 'Only admins can add people, using "Add a user" below.'}
+				</p>
+			</div>
+			<button
+				type="button"
+				role="switch"
+				aria-checked={registrationEnabled}
+				aria-label="Public sign-up"
+				disabled={savingRegistration}
+				onclick={toggleRegistration}
+				class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50 {registrationEnabled
+					? 'bg-indigo-600'
+					: 'bg-slate-300 dark:bg-slate-700'}"
+			>
+				<span
+					class="inline-block h-5 w-5 rounded-full bg-white shadow transition {registrationEnabled
+						? 'translate-x-5'
+						: 'translate-x-0.5'}"
+				></span>
+			</button>
+		</div>
+	{/if}
 
 	{#if revealed}
 		<div

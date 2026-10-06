@@ -10,6 +10,7 @@ import type {
 	CardTimeEntries,
 	Comment,
 	CreatedUser,
+	InstanceSettings,
 	InviteCandidate,
 	Label,
 	List,
@@ -182,6 +183,12 @@ export function errorMessage(err: unknown): string {
 
 export function register(email: string, name: string, password: string): Promise<User> {
 	return request('POST', `${AUTH_PREFIX}register`, { email, name, password });
+}
+
+/** Whether the sign-up form can be used right now. */
+export async function registrationOpen(): Promise<boolean> {
+	const status = await request<{ open: boolean }>('GET', `${AUTH_PREFIX}registration`);
+	return status.open;
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -437,6 +444,14 @@ export function getServerInfo(): Promise<ServerInfo> {
 
 export function getStorageUsage(): Promise<StorageUsage> {
 	return request('GET', '/api/admin/storage');
+}
+
+export function getSettings(): Promise<InstanceSettings> {
+	return request('GET', '/api/admin/settings');
+}
+
+export function setRegistrationEnabled(enabled: boolean): Promise<InstanceSettings> {
+	return request('PATCH', '/api/admin/settings', { registration_enabled: enabled });
 }
 
 export function listUsers(): Promise<AdminUser[]> {

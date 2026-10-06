@@ -106,7 +106,7 @@ No Docker. No Postgres. No Redis. Drop it on a $5 VPS and run it.
 - [ ] Users list (search, workspace count, joined date) with create user (temporary password)
 - [ ] Change a user's instance role; reset a user's password; deactivate / reactivate
 - [ ] Invite autocomplete for instance admins
-- [ ] Optional: disable open registration (`REGISTRATION_ENABLED=false`)
+- [ ] Public sign-up on/off toggle (default from `REGISTRATION_ENABLED`)
 - [ ] Every user can change their own password
 
 ---
@@ -158,6 +158,18 @@ ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member' CHECK(role IN (
 
 -- 0003_add_user_deactivated_at.sql: NULL = active, otherwise Unix ms of deactivation.
 ALTER TABLE users ADD COLUMN deactivated_at INTEGER;
+```
+
+### instance_settings
+
+```sql
+-- 0004_add_instance_settings.sql: single row (id = 1), created on the first change.
+-- NULL column = use the env default (registration_enabled → REGISTRATION_ENABLED).
+CREATE TABLE instance_settings (
+  id                   INTEGER PRIMARY KEY CHECK (id = 1),
+  registration_enabled INTEGER CHECK (registration_enabled IN (0, 1)),
+  updated_at           INTEGER NOT NULL
+);
 ```
 
 
@@ -398,6 +410,7 @@ POST   /api/auth/register
 POST   /api/auth/login
 POST   /api/auth/logout
 POST   /api/auth/refresh
+GET    /api/auth/registration  -- public: {open} so the UI can hide sign-up when closed
 GET    /api/auth/me
 POST   /api/auth/password   -- {current_password, new_password} → 204; signs out other sessions
 ```
@@ -405,7 +418,8 @@ POST   /api/auth/password   -- {current_password, new_password} → 204; signs o
 - Refresh cookie: `refresh_token=<refresh_tokens.id>.<64-hex secret>`; `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`.
   Only a bcrypt hash of the secret is stored; the id locates the row. Tokens rotate on every refresh.
 - Login: max 10 attempts per IP per 15 min. Register: max 5 per IP per hour (429 when exceeded).
-- Register returns 403 when `REGISTRATION_ENABLED=false` and at least one user exists.
+- Register returns 403 when registration is disabled (admin setting, else `REGISTRATION_ENABLED`)
+  and at least one user exists.
 - Deactivated users: login → 403 (after password check), refresh → 401, access tokens and WS → 401.
 
 
@@ -530,6 +544,8 @@ POST   /api/notifications/read-all
 ```
 GET    /api/admin/info
 GET    /api/admin/storage
+GET    /api/admin/settings                   -- {registration_enabled}
+PATCH  /api/admin/settings                   -- {registration_enabled: bool}; takes effect immediately
 GET    /api/admin/users                      -- all users + workspace_count, deactivated_at
 POST   /api/admin/users                      -- {email, name} → {user, temporary_password}
 PATCH  /api/admin/users/:id/role             -- {role: admin|member}
@@ -688,7 +704,7 @@ MAX_ATTACHMENT_SIZE_MB=25
 # App
 APP_NAME=ZeroBoard
 FIRST_USER_IS_ADMIN=true
-REGISTRATION_ENABLED=true   # false: only instance admins create accounts (first account always allowed)
+REGISTRATION_ENABLED=true   # default for the Admin → Users "Public sign-up" toggle (first account always allowed)
 ```
 
 ---

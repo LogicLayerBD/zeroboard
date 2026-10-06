@@ -11,6 +11,7 @@ pub mod labels;
 pub mod lists;
 pub mod notifications;
 pub mod positions;
+pub mod settings;
 pub mod time_entries;
 pub mod users;
 pub mod workspaces;

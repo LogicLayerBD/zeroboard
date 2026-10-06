@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as api from '$lib/api';
 	import Modal from '$lib/components/ui/Modal.svelte';
+	import PasswordInput from '$lib/components/ui/PasswordInput.svelte';
 	import { toastSuccess } from '$lib/stores/toast.store';
 
 	/** Mirrors the backend limits so most mistakes are caught before a round trip. */
@@ -48,34 +49,24 @@
 		<h2 class="text-lg font-semibold text-slate-900 dark:text-white">Change password</h2>
 		<label class="block">
 			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Current password</span>
-			<input
-				type="password"
-				autocomplete="current-password"
-				required
-				class="input w-full py-2.5"
-				bind:value={currentPassword}
-			/>
+			<PasswordInput autocomplete="current-password" required bind:value={currentPassword} />
 		</label>
 		<label class="block">
 			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">New password</span>
-			<input
-				type="password"
+			<PasswordInput
 				autocomplete="new-password"
 				required
 				minlength={MIN_PASSWORD_CHARS}
-				class="input w-full py-2.5"
 				bind:value={newPassword}
 			/>
 			<span class="mt-1 block text-xs text-slate-400 dark:text-slate-500">At least {MIN_PASSWORD_CHARS} characters.</span>
 		</label>
 		<label class="block">
 			<span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Confirm new password</span>
-			<input
-				type="password"
+			<PasswordInput
 				autocomplete="new-password"
 				required
 				minlength={MIN_PASSWORD_CHARS}
-				class="input w-full py-2.5"
 				bind:value={confirmPassword}
 			/>
 		</label>

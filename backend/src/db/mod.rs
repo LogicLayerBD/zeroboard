@@ -430,7 +430,8 @@ mod tests {
         .unwrap();
         let mut expected = vec![
             "activity_log", "attachments", "boards", "card_assignees", "card_labels", "cards",
-            "comments", "labels", "lists", "notifications", "refresh_tokens", "time_entries",
+            "comments", "instance_settings", "labels", "lists", "notifications", "refresh_tokens",
+            "time_entries",
             "users", "workspace_members", "workspaces",
         ];
         expected.sort_unstable();
